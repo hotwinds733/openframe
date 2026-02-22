@@ -20,24 +20,26 @@ function getLogoUrl(id: string): string | undefined {
   return providerLogoUrls[`../../assets/providers/${id}.svg`]
 }
 
-function ProviderAvatar({ id, name, size = 6 }: { id: string; name: string; size?: number }) {
+function ProviderAvatar({ id, name, size = 24 }: { id: string; name: string; size?: number }) {
   const logoUrl = getLogoUrl(id)
-  const dim = `w-${size} h-${size}`
+  const px = size
+  const iconPx = Math.round(size * 0.6)
 
   return (
     <div
-      className={`${dim} rounded-full flex items-center justify-center shrink-0`}
-      style={{ background: providerColor(id) }}
+      className="rounded-full flex items-center justify-center shrink-0"
+      style={{ width: px, height: px, background: providerColor(id) }}
     >
       {logoUrl ? (
         <img
           src={logoUrl}
           alt={name}
-          className="w-3/5 h-3/5 object-contain"
-          style={{ filter: 'brightness(0) invert(1)' }}
+          style={{ width: iconPx, height: iconPx, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
         />
       ) : (
-        <span className="text-white text-[10px] font-bold">{name[0].toUpperCase()}</span>
+        <span className="text-white font-bold" style={{ fontSize: Math.round(size * 0.4) }}>
+          {name[0].toUpperCase()}
+        </span>
       )}
     </div>
   )
@@ -110,7 +112,7 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
                 onClick={() => setSelectedProviderId(provider.id)}
               >
                 {/* Avatar */}
-                <ProviderAvatar id={provider.id} name={provider.name} size={6} />
+                <ProviderAvatar id={provider.id} name={provider.name} size={24} />
                 {/* Name */}
                 <span className="flex-1 text-sm truncate">{provider.name}</span>
                 {/* Toggle */}
@@ -280,7 +282,7 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
 
       {/* Provider header */}
       <div className="px-6 py-4 border-b border-base-300 flex items-center gap-3 shrink-0">
-        <ProviderAvatar id={provider.id} name={provider.name} size={7} />
+        <ProviderAvatar id={provider.id} name={provider.name} size={28} />
         <span className="font-semibold text-sm">{provider.name}</span>
         <span className={`badge ${cfg.enabled ? 'badge-success' : 'badge-ghost'}`}>
           {cfg.enabled ? t('settings.aiEnabled') : t('settings.aiDisabled')}
