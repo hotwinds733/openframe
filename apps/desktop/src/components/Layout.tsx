@@ -17,7 +17,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { to: '/', icon: FolderOpen, labelKey: 'menu.overview' },
-  { to: '/list', icon: SwatchBook, labelKey: 'menu.list' },
+  { to: '/genres', icon: SwatchBook, labelKey: 'menu.list' },
 ]
 
 interface LayoutProps {
