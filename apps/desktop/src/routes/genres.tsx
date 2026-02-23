@@ -108,7 +108,7 @@ function ListPage() {
       {genres.length === 0 ? (
         <div className="text-center text-base-content/40 py-16 text-sm">{t('styleLibrary.empty')}</div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="flex gap-4 flex-wrap">
           {genres.map((genre) => (
             <GenreCard key={genre.id} genre={genre} onDelete={() => setGenreDeleteTarget(genre)} t={t} />
           ))}
