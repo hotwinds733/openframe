@@ -186,12 +186,13 @@ export const AI_PROVIDERS: ProviderDef[] = [
     sdkPackage: '@ai-sdk/alibaba',
     name: 'Qwen',
     models: [
-      { id: 'qwen-max',        name: 'Qwen Max',       type: 'text' },
+      { id: 'qwen3-max',       name: 'Qwen3 Max',      type: 'text' },
       { id: 'qwen-plus',       name: 'Qwen Plus',      type: 'text' },
       { id: 'qwen-turbo',      name: 'Qwen Turbo',     type: 'text' },
-      { id: 'qwen-long',       name: 'Qwen Long',      type: 'text' },
-      { id: 'qwen-vl-max',     name: 'Qwen VL Max',    type: 'text' },
+      { id: 'qwq-32b',         name: 'QwQ 32B',        type: 'text' },
       { id: 'wanx-v1',         name: 'Wanxiang v1',    type: 'image' },
+      { id: 'wan2.6-t2v',      name: 'Wan2.6 T2V',     type: 'video' },
+      { id: 'wan2.6-i2v',      name: 'Wan2.6 I2V',     type: 'video' },
     ],
   },
   {

@@ -16,17 +16,50 @@ import { createBaseten } from '@ai-sdk/baseten'
 import { createAlibaba } from '@ai-sdk/alibaba'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel, ImageModel } from 'ai'
+import type { Experimental_VideoModelV3 } from '@ai-sdk/provider'
 import type { AIConfig, AIProviderConfig } from './config'
 import { AI_PROVIDERS, type ModelType } from './providers'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type AnyModel = LanguageModel | ImageModel
+/** SDK-backed video model (Vercel AI SDK `Experimental_VideoModelV3`). */
+export type VideoModel = Experimental_VideoModelV3
+
+/**
+ * Descriptor returned for providers without a Vercel AI SDK (custom REST required),
+ * or for model types the SDK doesn't support for a given provider.
+ * Callers check `isCustomRestModel(m)` and dispatch to provider-specific REST logic.
+ */
+export interface CustomRestModel {
+  readonly _tag: 'custom-rest'
+  readonly providerId: string
+  readonly modelId: string
+  readonly modelType: ModelType
+  readonly apiKey: string | undefined
+  readonly baseUrl: string | undefined
+}
+
+export type AnyModel = LanguageModel | ImageModel | VideoModel | CustomRestModel
+
+export function isCustomRestModel(m: AnyModel): m is CustomRestModel {
+  return (m as CustomRestModel)._tag === 'custom-rest'
+}
+
+export function isVideoModel(m: AnyModel): m is VideoModel {
+  return !isCustomRestModel(m) && (m as { modelType?: string }).modelType === 'videoModel'
+}
+
+export function isImageModel(m: AnyModel): m is ImageModel {
+  return !isCustomRestModel(m) && (m as { modelType?: string }).modelType === 'imageModel'
+}
+
+export function isLanguageModel(m: AnyModel): m is LanguageModel {
+  return !isCustomRestModel(m) && (m as { modelType?: string }).modelType === 'languageModel'
+}
 
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Resolve model type (text / image / video) from provider definitions or custom models */
 function resolveModelType(
   providerId: string,
   modelId: string,
@@ -40,7 +73,22 @@ function resolveModelType(
   return allModels.find(m => m.id === modelId)?.type ?? 'text'
 }
 
-/** Build the actual provider model instance */
+function customRest(
+  providerId: string,
+  modelId: string,
+  modelType: ModelType,
+  cfg: AIProviderConfig,
+): CustomRestModel {
+  return {
+    _tag: 'custom-rest',
+    providerId,
+    modelId,
+    modelType,
+    apiKey: cfg.apiKey || undefined,
+    baseUrl: cfg.baseUrl || undefined,
+  }
+}
+
 function buildModel(
   providerId: string,
   modelId: string,
@@ -112,17 +160,22 @@ function buildModel(
       return createBaseten({ apiKey, baseURL })(modelId)
 
     case 'doubao': {
+      // Doubao only has text models; video is future, route to custom REST if needed
       const p = createOpenAICompatible({
         name: 'doubao',
         baseURL: baseURL ?? 'https://ark.volcengine.com/api/v3',
         apiKey,
       })
+      if (type === 'video' || type === 'image') return customRest(providerId, modelId, type, cfg)
       return p(modelId)
     }
 
     case 'qwen': {
       const p = createAlibaba({ apiKey, baseURL })
-      return type === 'image' ? p.image(modelId) : p(modelId)
+      if (type === 'video') return p.video(modelId)
+      // Alibaba SDK has no image model support; fall back to custom REST
+      if (type === 'image') return customRest(providerId, modelId, type, cfg)
+      return p(modelId)
     }
 
     case 'zhipu': {
@@ -131,8 +184,15 @@ function buildModel(
         baseURL: baseURL ?? 'https://open.bigmodel.cn/api/paas/v4',
         apiKey,
       })
-      return type === 'image' ? p.image(modelId) : p(modelId)
+      return type === 'image' ? p.imageModel(modelId) : p(modelId)
     }
+
+    // ── No-SDK providers — always return a CustomRestModel descriptor ─────────
+    case 'stability':
+    case 'replicate':
+    case 'runway':
+    case 'kling':
+      return customRest(providerId, modelId, type, cfg)
 
     default:
       return null
@@ -146,7 +206,7 @@ function buildModel(
  *
  * ```ts
  * const model = createProviderModel('openai', 'gpt-4o', config)
- * const { text } = await generateText({ model, prompt: 'Hello' })
+ * if (isLanguageModel(model)) await generateText({ model, prompt: 'Hello' })
  * ```
  */
 export function createProviderModel(
@@ -162,7 +222,7 @@ export function createProviderModel(
 
 /**
  * Parse a `"providerId:modelId"` key and create the model.
- * Handles model IDs that contain colons (e.g. Bedrock `anthropic.claude...-v2:0`).
+ * Handles model IDs that contain colons (e.g. `anthropic.claude...-v2:0`).
  *
  * ```ts
  * const model = createModelFromKey('openai:gpt-4o', config)
@@ -197,6 +257,10 @@ export function getDefaultModel(
 export const getDefaultTextModel = (config: AIConfig): LanguageModel | null =>
   getDefaultModel('text', config) as LanguageModel | null
 
-/** Get the configured default image model (`ImageModel`). */
-export const getDefaultImageModel = (config: AIConfig): ImageModel | null =>
-  getDefaultModel('image', config) as ImageModel | null
+/** Get the configured default image model (`ImageModel | CustomRestModel`). */
+export const getDefaultImageModel = (config: AIConfig): ImageModel | CustomRestModel | null =>
+  getDefaultModel('image', config) as ImageModel | CustomRestModel | null
+
+/** Get the configured default video model (`VideoModel | CustomRestModel`). */
+export const getDefaultVideoModel = (config: AIConfig): VideoModel | CustomRestModel | null =>
+  getDefaultModel('video', config) as VideoModel | CustomRestModel | null
