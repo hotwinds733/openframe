@@ -44,6 +44,7 @@ export default {
     aiEnableModel: 'Enable model',
     aiDisableModel: 'Disable model',
     aiSelectProviderHint: 'Select a provider on the left to configure its settings.',
+    embedding: 'Embedding',
     aiEmbedding: 'Embedding',
     aiEmbeddingModel: 'Default Embedding Model',
     aiEmbeddingProviders: 'Embedding Providers',

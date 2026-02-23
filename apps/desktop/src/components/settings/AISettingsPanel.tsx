@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, X, Plus, Upload, Download, CheckCircle, XCircle, Loader, Cpu } from 'lucide-react'
+import { Eye, EyeOff, X, Plus, Upload, Download, CheckCircle, XCircle, Loader } from 'lucide-react'
 import {
   AI_PROVIDERS,
   providerColor,
@@ -51,12 +51,9 @@ const MODEL_TYPES: { type: ModelType; labelKey: string }[] = [
   { type: 'video', labelKey: 'settings.aiVideoModel' },
 ]
 
-const EMBEDDING_PROVIDERS = AI_PROVIDERS.filter((p) =>
+export const EMBEDDING_PROVIDERS = AI_PROVIDERS.filter((p) =>
   p.models.some((m) => m.type === 'embedding'),
 )
-
-/** Sentinel value used in selectedProviderId to show the Embedding panel */
-const EMBEDDING_TAB = '__embedding__'
 
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +77,7 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
     })
   }
 
-  const selectedProvider = selectedProviderId && selectedProviderId !== EMBEDDING_TAB
+  const selectedProvider = selectedProviderId
     ? AI_PROVIDERS.find((p) => p.id === selectedProviderId) ?? null
     : null
 
@@ -106,24 +103,6 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
 
         {/* Provider items */}
         <div className="flex-1 overflow-auto py-1">
-          {/* Embedding tab */}
-          <button
-            className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-base-200 transition-colors text-left ${
-              selectedProviderId === EMBEDDING_TAB ? 'bg-base-200' : ''
-            }`}
-            onClick={() => setSelectedProviderId(EMBEDDING_TAB)}
-          >
-            <div
-              className="rounded-full flex items-center justify-center shrink-0"
-              style={{ width: 24, height: 24, background: '#7c3aed' }}
-            >
-              <Cpu size={12} className="text-white" />
-            </div>
-            <span className="flex-1 text-sm truncate">{t('settings.aiEmbedding')}</span>
-          </button>
-
-          <div className="mx-3 my-1 border-t border-base-300" />
-
           {AI_PROVIDERS.map((provider) => {
             const cfg = config.providers[provider.id] ?? { apiKey: '', baseUrl: '', enabled: false }
             const isSelected = selectedProviderId === provider.id
@@ -157,11 +136,9 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
         </div>
       </div>
 
-      {/* ── Right: Provider Detail or Default Models or Embedding ── */}
+      {/* ── Right: Provider Detail or Default Models ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {selectedProviderId === EMBEDDING_TAB ? (
-          <EmbeddingPanel config={config} onChange={onChange} />
-        ) : selectedProvider == null ? (
+        {selectedProvider == null ? (
           <DefaultModelsPanel config={config} onChange={onChange} />
         ) : (
           <ProviderDetail
@@ -233,7 +210,7 @@ function DefaultModelsPanel({ config, onChange }: { config: AIConfig; onChange: 
 
 // ── Embedding Panel ────────────────────────────────────────────────────────────
 
-function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChange: (c: AIConfig) => void }) {
+export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChange: (c: AIConfig) => void }) {
   const { t } = useTranslation()
 
   function updateModel(value: string) {

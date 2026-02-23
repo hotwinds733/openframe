@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { X, Settings, Bot } from 'lucide-react'
+import { X, Settings, Bot, Cpu } from 'lucide-react'
 import { useLiveQuery } from '@tanstack/react-db'
 import { settingsCollection } from '../db/settingsCollection'
 import { type AIConfig, DEFAULT_AI_CONFIG } from '@openframe/providers'
 import { GeneralSettingsPanel, type Theme } from './settings/GeneralSettingsPanel'
-import { AISettingsPanel } from './settings/AISettingsPanel'
+import { AISettingsPanel, EmbeddingPanel } from './settings/AISettingsPanel'
 
-type Category = 'general' | 'ai'
+type Category = 'general' | 'ai' | 'embedding'
 
 interface SettingsModalProps {
   open: boolean
@@ -16,8 +16,9 @@ interface SettingsModalProps {
 }
 
 const categories: { id: Category; labelKey: string; icon: React.ReactNode }[] = [
-  { id: 'general', labelKey: 'settings.general', icon: <Settings size={16} /> },
-  { id: 'ai',      labelKey: 'settings.ai',      icon: <Bot size={16} /> },
+  { id: 'general',   labelKey: 'settings.general',   icon: <Settings size={16} /> },
+  { id: 'ai',        labelKey: 'settings.ai',        icon: <Bot size={16} /> },
+  { id: 'embedding', labelKey: 'settings.embedding', icon: <Cpu size={16} /> },
 ]
 
 function applyTheme(theme: Theme) {
@@ -75,8 +76,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     onClose()
   }
 
-  const isAI = activeCategory === 'ai'
-
   return createPortal(
     <dialog className={`modal ${open ? 'modal-open' : ''}`}>
       <div className="modal-box p-0 max-w-4xl w-full h-[600px] flex flex-col overflow-hidden">
@@ -112,9 +111,13 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             </div>
 
             {/* Settings body */}
-            {isAI ? (
+            {activeCategory === 'ai' ? (
               <div className="flex-1 overflow-hidden">
                 <AISettingsPanel config={pendingAI} onChange={setPendingAI} />
+              </div>
+            ) : activeCategory === 'embedding' ? (
+              <div className="flex-1 overflow-hidden">
+                <EmbeddingPanel config={pendingAI} onChange={setPendingAI} />
               </div>
             ) : (
               <div className="flex-1 overflow-auto px-6 py-5 flex flex-col gap-7">
