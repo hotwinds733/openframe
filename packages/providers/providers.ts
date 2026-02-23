@@ -114,16 +114,6 @@ export const AI_PROVIDERS: ProviderDef[] = [
     ],
   },
   {
-    id: 'cohere',
-    sdkPackage: '@ai-sdk/cohere',
-    name: 'Cohere',
-    models: [
-      { id: 'command-r-plus', name: 'Command R+',  type: 'text' },
-      { id: 'command-r',      name: 'Command R',   type: 'text' },
-      { id: 'command',        name: 'Command',     type: 'text' },
-    ],
-  },
-  {
     id: 'perplexity',
     sdkPackage: '@ai-sdk/perplexity',
     name: 'Perplexity',
@@ -131,43 +121,6 @@ export const AI_PROVIDERS: ProviderDef[] = [
       { id: 'sonar-pro',   name: 'Sonar Pro',  type: 'text' },
       { id: 'sonar',       name: 'Sonar',      type: 'text' },
       { id: 'sonar-reasoning-pro', name: 'Sonar Reasoning Pro', type: 'text' },
-    ],
-  },
-  {
-    id: 'cerebras',
-    sdkPackage: '@ai-sdk/cerebras',
-    name: 'Cerebras',
-    models: [
-      { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', type: 'text' },
-      { id: 'llama-3.1-8b',  name: 'Llama 3.1 8B',  type: 'text' },
-    ],
-  },
-  {
-    id: 'fireworks',
-    sdkPackage: '@ai-sdk/fireworks',
-    name: 'Fireworks',
-    models: [
-      { id: 'accounts/fireworks/models/llama-v3p3-70b-instruct', name: 'Llama 3.3 70B',  type: 'text' },
-      { id: 'accounts/fireworks/models/deepseek-r1',             name: 'DeepSeek R1',     type: 'text' },
-      { id: 'accounts/fireworks/models/flux-1-1-pro',            name: 'FLUX 1.1 Pro',    type: 'image' },
-    ],
-  },
-  {
-    id: 'deepinfra',
-    sdkPackage: '@ai-sdk/deepinfra',
-    name: 'DeepInfra',
-    models: [
-      { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B',    type: 'text' },
-      { id: 'deepseek-ai/DeepSeek-R1',           name: 'DeepSeek R1',       type: 'text' },
-      { id: 'Qwen/QwQ-32B',                      name: 'Qwen QwQ 32B',      type: 'text' },
-    ],
-  },
-  {
-    id: 'baseten',
-    sdkPackage: '@ai-sdk/baseten',
-    name: 'Baseten',
-    models: [
-      { id: 'custom', name: 'Custom Deployment', type: 'text' },
     ],
   },
   {

@@ -7,12 +7,7 @@ import { createMistral } from '@ai-sdk/mistral'
 import { createGroq } from '@ai-sdk/groq'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createTogetherAI } from '@ai-sdk/togetherai'
-import { createCohere } from '@ai-sdk/cohere'
 import { createPerplexity } from '@ai-sdk/perplexity'
-import { createCerebras } from '@ai-sdk/cerebras'
-import { createFireworks } from '@ai-sdk/fireworks'
-import { createDeepInfra } from '@ai-sdk/deepinfra'
-import { createBaseten } from '@ai-sdk/baseten'
 import { createAlibaba } from '@ai-sdk/alibaba'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel, ImageModel } from 'ai'
@@ -137,27 +132,8 @@ function buildModel(
       return type === 'image' ? p.image(modelId) : p(modelId)
     }
 
-    case 'cohere':
-      return createCohere({ apiKey, baseURL })(modelId)
-
     case 'perplexity':
       return createPerplexity({ apiKey, baseURL })(modelId)
-
-    case 'cerebras':
-      return createCerebras({ apiKey, baseURL })(modelId)
-
-    case 'fireworks': {
-      const p = createFireworks({ apiKey, baseURL })
-      return type === 'image' ? p.image(modelId) : p(modelId)
-    }
-
-    case 'deepinfra': {
-      const p = createDeepInfra({ apiKey, baseURL })
-      return type === 'image' ? p.image(modelId) : p(modelId)
-    }
-
-    case 'baseten':
-      return createBaseten({ apiKey, baseURL })(modelId)
 
     case 'doubao': {
       // Doubao only has text models; video is future, route to custom REST if needed
