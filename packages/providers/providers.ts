@@ -170,6 +170,21 @@ export const AI_PROVIDERS: ProviderDef[] = [
     ],
   },
   {
+    id: 'ark',
+    sdkPackage: '@ai-sdk/openai-compatible',
+    name: '火山方舟',
+    defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    models: [
+      { id: 'doubao-1.5-pro-32k',  name: 'Doubao 1.5 Pro 32K',  type: 'text' },
+      { id: 'doubao-1.5-lite-32k', name: 'Doubao 1.5 Lite 32K', type: 'text' },
+      { id: 'doubao-1.5-pro-256k', name: 'Doubao 1.5 Pro 256K', type: 'text' },
+      { id: 'doubao-seed-1.6',     name: 'Doubao Seed 1.6',     type: 'text' },
+      { id: 'deepseek-r1-250120',  name: 'DeepSeek R1',         type: 'text' },
+      { id: 'deepseek-v3-250324',  name: 'DeepSeek V3',         type: 'text' },
+      { id: 'doubao-embedding-large', name: 'Doubao Embedding Large', type: 'embedding', dimension: 2048 },
+    ],
+  },
+  {
     id: 'ollama',
     sdkPackage: '@ai-sdk/openai-compatible',
     name: 'Ollama',

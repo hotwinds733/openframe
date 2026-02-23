@@ -147,6 +147,16 @@ function buildModel(
     case 'perplexity':
       return createPerplexity({ apiKey, baseURL })(modelId)
 
+    case 'ark': {
+      const p = createOpenAICompatible({
+        name: 'ark',
+        baseURL: baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+        apiKey,
+      })
+      if (type === 'embedding') return null  // use createEmbeddingModel instead
+      return p(modelId)
+    }
+
     case 'doubao': {
       // Doubao only has text models; video is future, route to custom REST if needed
       const p = createOpenAICompatible({
@@ -276,6 +286,13 @@ export function createEmbeddingModel(
   switch (providerId) {
     case 'openai':
       return createOpenAI({ apiKey, baseURL }).textEmbeddingModel(modelId)
+
+    case 'ark':
+      return createOpenAICompatible({
+        name: 'ark',
+        baseURL: baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+        apiKey,
+      }).textEmbeddingModel(modelId)
 
     case 'ollama':
       return createOpenAICompatible({

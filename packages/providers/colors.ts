@@ -12,6 +12,7 @@ export const PROVIDER_COLORS: Record<string, string> = {
   doubao:           '#1664ff',
   qwen:             '#6200ea',
   zhipu:            '#3b82f6',
+  ark:              '#ff6200',
 }
 
 export function providerColor(id: string): string {
