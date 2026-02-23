@@ -192,7 +192,7 @@ function DefaultModelsPanel({ config, onChange }: { config: AIConfig; onChange: 
                     {models.map((m) => {
                       const key = `${provider.id}:${m.id}`
                       return (
-                        <option key={m.id} value={key} disabled={!!config.disabledModels?.[key]}>
+                        <option key={m.id} value={key} disabled={!config.enabledModels?.[key]}>
                           {m.name}
                         </option>
                       )
@@ -275,7 +275,8 @@ export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChang
           const embeddingModels = [
             ...provider.models.filter((m) => m.type === 'embedding'),
             ...(config.customModels[provider.id] ?? []).filter((m) => m.type === 'embedding'),
-          ]
+          ].filter((m) => !!config.enabledModels?.[`${provider.id}:${m.id}`])
+            .filter((m) => !config.hiddenModels?.[`${provider.id}:${m.id}`])
           return (
             <div key={provider.id} className="flex flex-col">
               {/* Provider label */}
@@ -393,13 +394,13 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
 
   function toggleModel(modelId: string) {
     const key = `${provider.id}:${modelId}`
-    const prev = config.disabledModels ?? {}
+    const prev = config.enabledModels ?? {}
     if (prev[key]) {
       const next = { ...prev }
       delete next[key]
-      onChange({ ...config, disabledModels: next })
+      onChange({ ...config, enabledModels: next })
     } else {
-      onChange({ ...config, disabledModels: { ...prev, [key]: true } })
+      onChange({ ...config, enabledModels: { ...prev, [key]: true } })
     }
   }
 
@@ -660,7 +661,7 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
           <div className="flex flex-col">
             {allModels.map((model) => {
               const key = `${provider.id}:${model.id}`
-              const isEnabled = !(config.disabledModels?.[key])
+              const isEnabled = !!config.enabledModels?.[key]
               const isEditing = editingModelId === model.id
 
               if (isEditing) {
@@ -716,12 +717,13 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
                   key={model.id}
                   className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 group"
                 >
-                  {/* Enable/disable dot */}
-                  <button
-                    className="shrink-0 w-2.5 h-2.5 rounded-full transition-colors"
-                    style={{ background: isEnabled ? '#22c55e' : '#9ca3af' }}
-                    title={isEnabled ? t('settings.aiDisableModel') : t('settings.aiEnableModel')}
-                    onClick={() => toggleModel(model.id)}
+                  {/* Enable/disable toggle */}
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-xs shrink-0"
+                    checked={isEnabled}
+                    onChange={() => toggleModel(model.id)}
+                    onClick={(e) => e.stopPropagation()}
                   />
                   {/* Model name */}
                   <span className="flex-1 text-sm truncate">{model.name}</span>

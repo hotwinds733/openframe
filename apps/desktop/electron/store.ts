@@ -71,7 +71,7 @@ export const store = new Store<AppSettings>({
           },
           default: {},
         },
-        disabledModels: {
+        enabledModels: {
           type: 'object',
           additionalProperties: { type: 'boolean' },
           default: {},
