@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Clapperboard, FolderOpen, Image, MapPin, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { Clapperboard, FolderOpen, MapPin, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, X } from 'lucide-react'
 
 type ModelOption = {
   key: string
@@ -49,10 +49,7 @@ interface ScenePanelProps {
   onExtractFromScript: () => void
   onRegenerateFromScript: () => void
   onDeleteScene: (id: string, title: string) => void
-  onEnhanceScene: (id: string) => void
-  onRefreshScene: (id: string) => void
   onGenerateSceneImage: (id: string) => void
-  onUploadSceneImage: (id: string) => void
 }
 
 function getThumbnailSrc(value: string | null): string | null {
@@ -78,10 +75,7 @@ export function ScenePanel({
   onExtractFromScript,
   onRegenerateFromScript,
   onDeleteScene,
-  onEnhanceScene,
-  onRefreshScene,
   onGenerateSceneImage,
-  onUploadSceneImage,
 }: ScenePanelProps) {
   const { t } = useTranslation()
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
@@ -238,10 +232,7 @@ export function ScenePanel({
                 <div className="mt-2 flex gap-1 text-xs text-base-content/65"><ScrollText size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.description || '-'}</span></div>
 
                 <div className="mt-auto pt-3 border-t border-base-300 flex items-center justify-center gap-1">
-                  <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnhanceScene(scene.id) }} disabled={sceneBusyId === scene.id || extractingFromScript || extractingRegenerate} title={t('projectLibrary.sceneEnhanceSingle')}><Sparkles size={12} /></button>
-                  <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRefreshScene(scene.id) }} disabled={sceneBusyId === scene.id || extractingFromScript || extractingRegenerate} title={t('projectLibrary.sceneRefreshSingle')}><RefreshCw size={12} /></button>
-                  <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUploadSceneImage(scene.id) }} disabled={sceneBusyId === scene.id} title={t('projectLibrary.sceneUploadImage')}><Upload size={12} /></button>
-                  <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateSceneImage(scene.id) }} disabled={sceneBusyId === scene.id || extractingFromScript || extractingRegenerate} title={t('projectLibrary.sceneGenerateImage')}><Image size={12} /></button>
+                  <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateSceneImage(scene.id) }} disabled={sceneBusyId === scene.id || extractingFromScript || extractingRegenerate} title={t('projectLibrary.sceneGenerateImage')}><Sparkles size={12} /></button>
                   <button type="button" className="btn btn-xs btn-outline text-error border-error/40 hover:bg-error/10" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDeleteScene(scene.id, scene.title) }} disabled={sceneBusyId === scene.id} title={t('projectLibrary.delete')}><Trash2 size={12} /></button>
                 </div>
               </div>

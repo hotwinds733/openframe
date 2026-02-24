@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderOpen, Image, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, User, X } from 'lucide-react'
+import { FolderOpen, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, User, X } from 'lucide-react'
 import type { Character } from '../db/characters_collection'
 
 type ModelOption = {
@@ -39,10 +39,7 @@ interface CharacterPanelProps {
   onExtractFromScript: () => void
   onRegenerateFromScript: () => void
   onDeleteCharacter: (id: string, name: string) => void
-  onEnhanceCharacter: (id: string) => void
-  onRefreshCharacter: (id: string) => void
   onGenerateTurnaround: (id: string) => void
-  onUploadCharacter: (id: string) => void
 }
 
 function getThumbnailSrc(value: string | null): string | null {
@@ -68,10 +65,7 @@ export function CharacterPanel({
   onExtractFromScript,
   onRegenerateFromScript,
   onDeleteCharacter,
-  onEnhanceCharacter,
-  onRefreshCharacter,
   onGenerateTurnaround,
-  onUploadCharacter,
 }: CharacterPanelProps) {
   const { t } = useTranslation()
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
@@ -330,44 +324,11 @@ export function CharacterPanel({
                     onClick={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
-                      onEnhanceCharacter(card.id)
-                    }}
-                    disabled={characterBusyId === card.id || extractingFromDraft || extractingRegenerate}
-                    title={t('projectLibrary.characterEnhanceSingle')}
-                  ><Sparkles size={12} /></button>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-outline"
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      onRefreshCharacter(card.id)
-                    }}
-                    disabled={characterBusyId === card.id || extractingFromDraft || extractingRegenerate}
-                    title={t('projectLibrary.characterRefreshSingle')}
-                  ><RefreshCw size={12} /></button>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-outline"
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      onUploadCharacter(card.id)
-                    }}
-                    disabled={characterBusyId === card.id}
-                    title={t('projectLibrary.characterUploadImage')}
-                  ><Upload size={12} /></button>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-outline"
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
                       onGenerateTurnaround(card.id)
                     }}
                     disabled={characterBusyId === card.id || extractingFromDraft || extractingRegenerate}
                     title={t('projectLibrary.characterGenerateTurnaround')}
-                  ><Image size={12} /></button>
+                  ><Sparkles size={12} /></button>
                   <button
                     type="button"
                     className="btn btn-xs btn-outline text-error border-error/40 hover:bg-error/10"
@@ -406,7 +367,7 @@ export function CharacterPanel({
 
             <div className="p-5 md:p-6 max-h-[70vh] overflow-auto">
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
-                <aside className="rounded-xl border border-base-300 bg-linear-to-br from-base-200/90 via-base-100 to-base-200/70 p-4 min-h-[620px] flex flex-col items-center justify-center gap-4">
+                <aside className="rounded-xl border border-base-300 bg-linear-to-br from-base-200/90 via-base-100 to-base-200/70 p-4 min-h-155 flex flex-col items-center justify-center gap-4">
                   {getThumbnailSrc(createDraft.thumbnail) ? (
                     <img src={getThumbnailSrc(createDraft.thumbnail)!} alt={createDraft.name || 'character'} className="h-full w-full rounded-lg object-cover" />
                   ) : (

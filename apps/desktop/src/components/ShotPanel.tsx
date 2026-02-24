@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Camera, Clapperboard, PlusCircle, Trash2, X } from 'lucide-react'
+import { Camera, Clapperboard, PlusCircle, Sparkles, Trash2, X } from 'lucide-react'
 
 type SceneOption = { id: string; title: string }
 type CharacterOption = { id: string; name: string }
@@ -206,7 +206,7 @@ export function ShotPanel({
                     <span key={id} className="badge badge-sm badge-outline">{characterNameMap.get(id) || '?'}</span>
                   ))}
                 </div>
-                <div className="mt-auto pt-3 border-t border-base-300 flex justify-end gap-1">
+                <div className="mt-auto pt-3 border-t border-base-300 flex justify-center gap-1">
                   <button
                     type="button"
                     className="btn btn-xs btn-outline"
@@ -218,7 +218,7 @@ export function ShotPanel({
                     disabled={generatingFromScript || generatingAllImages || generatingShotId === shot.id}
                     title={t('projectLibrary.shotGenerateSingleImage')}
                   >
-                    <Camera size={12} />
+                    <Sparkles size={12} />
                   </button>
                   <button
                     type="button"

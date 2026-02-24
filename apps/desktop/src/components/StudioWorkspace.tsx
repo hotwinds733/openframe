@@ -483,133 +483,6 @@ export function StudioWorkspace({
     }
   }
 
-  async function handleEnhanceCharacter(id: string) {
-    if (!scriptContent.trim()) {
-      setCharacterError(t('projectLibrary.aiEditorEmpty'))
-      return
-    }
-    const character = projectCharacters.find((item) => item.id === id)
-    if (!character) return
-
-    setCharacterBusyId(id)
-    setCharacterError('')
-    try {
-      const result = await window.aiAPI.enhanceCharacterFromScript({
-        script: scriptContent,
-        character: {
-          name: character.name,
-          gender: character.gender,
-          age: character.age,
-          personality: character.personality,
-          appearance: character.appearance,
-          background: character.background,
-        },
-        modelKey: selectedTextModelKey || undefined,
-      })
-      if (!result.ok) {
-        setCharacterError(result.error)
-        return
-      }
-      await persistCharacter({
-        ...character,
-        name: result.character.name || character.name,
-        gender: normalizeGender(result.character.gender),
-        age: normalizeAge(result.character.age),
-        personality: result.character.personality,
-        appearance: result.character.appearance,
-        background: result.character.background,
-      })
-    } catch {
-      setCharacterError(t('projectLibrary.aiToolkitFailed'))
-    } finally {
-      setCharacterBusyId(null)
-    }
-  }
-
-  async function handleRefreshCharacter(id: string) {
-    if (!scriptContent.trim()) {
-      setCharacterError(t('projectLibrary.aiEditorEmpty'))
-      return
-    }
-    const character = projectCharacters.find((item) => item.id === id)
-    if (!character) return
-
-    setCharacterBusyId(id)
-    setCharacterError('')
-    try {
-      const result = await window.aiAPI.extractCharactersFromScript({
-        script: scriptContent,
-        modelKey: selectedTextModelKey || undefined,
-      })
-      if (!result.ok) {
-        setCharacterError(result.error)
-        return
-      }
-
-      const key = normalizeCharacterName(character.name)
-      const match = result.characters.find((item) => normalizeCharacterName(item.name) === key)
-      if (!match) {
-        setCharacterError(t('projectLibrary.characterNotFoundInScript'))
-        return
-      }
-
-      await persistCharacter({
-        ...character,
-        name: match.name || character.name,
-        gender: normalizeGender(match.gender),
-        age: normalizeAge(match.age),
-        personality: match.personality,
-        appearance: match.appearance,
-        background: match.background,
-      })
-    } catch {
-      setCharacterError(t('projectLibrary.aiToolkitFailed'))
-    } finally {
-      setCharacterBusyId(null)
-    }
-  }
-
-  async function handleUploadCharacter(id: string) {
-    const character = projectCharacters.find((item) => item.id === id)
-    if (!character) return
-
-    const file = await new Promise<File | null>((resolve) => {
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'image/*'
-      input.onchange = () => {
-        resolve(input.files?.[0] ?? null)
-      }
-      input.click()
-    })
-
-    if (!file) return
-    setCharacterBusyId(id)
-    setCharacterError('')
-    try {
-      const ext = (() => {
-        const fromName = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : ''
-        if (fromName) return fromName
-        if (file.type === 'image/jpeg') return 'jpg'
-        if (file.type === 'image/png') return 'png'
-        if (file.type === 'image/webp') return 'webp'
-        if (file.type === 'image/gif') return 'gif'
-        return 'png'
-      })()
-
-      const buf = new Uint8Array(await file.arrayBuffer())
-      const savedPath = await window.thumbnailsAPI.save(buf, ext)
-      await persistCharacter({
-        ...character,
-        thumbnail: savedPath,
-      })
-    } catch {
-      setCharacterError(t('projectLibrary.saveError'))
-    } finally {
-      setCharacterBusyId(null)
-    }
-  }
-
   async function handleGenerateTurnaround(id: string) {
     const character = projectCharacters.find((item) => item.id === id)
     if (!character) return
@@ -837,124 +710,8 @@ export function StudioWorkspace({
     }
   }
 
-  async function handleEnhanceScene(id: string) {
-    if (!scriptContent.trim()) {
-      setSceneError(t('projectLibrary.aiEditorEmpty'))
-      return
-    }
-    const scene = seriesScenes.find((item) => item.id === id)
-    if (!scene) return
 
-    setSceneBusyId(id)
-    setSceneError('')
-    try {
-      const result = await window.aiAPI.enhanceSceneFromScript({
-        script: scriptContent,
-        scene: {
-          title: scene.title,
-          location: scene.location,
-          time: scene.time,
-          mood: scene.mood,
-          description: scene.description,
-          shot_notes: scene.shot_notes,
-        },
-        modelKey: selectedTextModelKey || undefined,
-      })
-      if (!result.ok) {
-        setSceneError(result.error)
-        return
-      }
-      await persistScene({
-        ...scene,
-        ...result.scene,
-      })
-    } catch {
-      setSceneError(t('projectLibrary.aiToolkitFailed'))
-    } finally {
-      setSceneBusyId(null)
-    }
-  }
 
-  async function handleRefreshScene(id: string) {
-    if (!scriptContent.trim()) {
-      setSceneError(t('projectLibrary.aiEditorEmpty'))
-      return
-    }
-    const scene = seriesScenes.find((item) => item.id === id)
-    if (!scene) return
-
-    setSceneBusyId(id)
-    setSceneError('')
-    try {
-      const result = await window.aiAPI.extractScenesFromScript({
-        script: scriptContent,
-        modelKey: selectedTextModelKey || undefined,
-      })
-      if (!result.ok) {
-        setSceneError(result.error)
-        return
-      }
-
-      const key = normalizeSceneTitle(scene.title)
-      const match = result.scenes.find((item) => normalizeSceneTitle(item.title) === key)
-      if (!match) {
-        setSceneError(t('projectLibrary.sceneNotFoundInScript'))
-        return
-      }
-
-      await persistScene({
-        ...scene,
-        title: match.title || scene.title,
-        location: match.location,
-        time: match.time,
-        mood: match.mood,
-        description: match.description,
-        shot_notes: match.shot_notes,
-      })
-    } catch {
-      setSceneError(t('projectLibrary.aiToolkitFailed'))
-    } finally {
-      setSceneBusyId(null)
-    }
-  }
-
-  async function handleUploadSceneImage(id: string) {
-    const scene = seriesScenes.find((item) => item.id === id)
-    if (!scene) return
-
-    const file = await new Promise<File | null>((resolve) => {
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'image/*'
-      input.onchange = () => resolve(input.files?.[0] ?? null)
-      input.click()
-    })
-    if (!file) return
-
-    setSceneBusyId(id)
-    setSceneError('')
-    try {
-      const ext = (() => {
-        const fromName = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : ''
-        if (fromName) return fromName
-        if (file.type === 'image/jpeg') return 'jpg'
-        if (file.type === 'image/png') return 'png'
-        if (file.type === 'image/webp') return 'webp'
-        if (file.type === 'image/gif') return 'gif'
-        return 'png'
-      })()
-      const buf = new Uint8Array(await file.arrayBuffer())
-      const savedPath = await window.thumbnailsAPI.save(buf, ext)
-      await persistScene({
-        ...scene,
-        thumbnail: savedPath,
-      })
-    } catch {
-      setSceneError(t('projectLibrary.saveError'))
-    } finally {
-      setSceneBusyId(null)
-    }
-  }
 
   async function handleGenerateSceneImage(id: string) {
     const scene = seriesScenes.find((item) => item.id === id)
@@ -1335,10 +1092,7 @@ export function StudioWorkspace({
             onExtractFromScript={() => void handleExtractCharactersFromScript()}
             onRegenerateFromScript={() => void handleRegenerateCharactersFromScript()}
             onDeleteCharacter={(id, name) => void handleDeleteCharacter(id, name)}
-            onEnhanceCharacter={(id) => void handleEnhanceCharacter(id)}
-            onRefreshCharacter={(id) => void handleRefreshCharacter(id)}
             onGenerateTurnaround={(id) => void handleGenerateTurnaround(id)}
-            onUploadCharacter={(id) => void handleUploadCharacter(id)}
           />
         ) : showScenePanel ? (
           <ScenePanel
@@ -1358,10 +1112,7 @@ export function StudioWorkspace({
             onExtractFromScript={() => void handleExtractScenesFromScript()}
             onRegenerateFromScript={() => void handleRegenerateScenesFromScript()}
             onDeleteScene={(id, title) => void handleDeleteScene(id, title)}
-            onEnhanceScene={(id) => void handleEnhanceScene(id)}
-            onRefreshScene={(id) => void handleRefreshScene(id)}
             onGenerateSceneImage={(id) => void handleGenerateSceneImage(id)}
-            onUploadSceneImage={(id) => void handleUploadSceneImage(id)}
           />
         ) : showShotPanel ? (
           <ShotPanel
