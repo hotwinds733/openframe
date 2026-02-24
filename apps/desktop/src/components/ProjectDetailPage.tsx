@@ -29,6 +29,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       seriesCollection.insert({
         id: crypto.randomUUID(),
         project_id: projectId,
+        title: `${t('projectLibrary.seriesNo')}${nextSortIndex}`,
         sort_index: nextSortIndex,
         thumbnail: null,
         duration,
@@ -89,7 +90,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
               </div>
 
               <div className="mb-4">
-                <p className="text-lg font-semibold text-base-content">{t('projectLibrary.seriesNo')}{item.sort_index}</p>
+                <p className="text-lg font-semibold text-base-content">{item.title || `${t('projectLibrary.seriesNo')}${item.sort_index}`}</p>
                 <p className="mt-2 inline-flex items-center gap-1 text-xs text-base-content/60">
                   <Clock3 size={12} />
                   {item.duration} {t('projectLibrary.minute')}

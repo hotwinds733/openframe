@@ -36,6 +36,7 @@ type ProjectRow = {
 type SeriesRow = {
   id: string
   project_id: string
+  title: string
   sort_index: number
   thumbnail: string | null
   duration: number

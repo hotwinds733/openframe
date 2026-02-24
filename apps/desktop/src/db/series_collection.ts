@@ -4,6 +4,7 @@ import type { OperationType } from '@tanstack/db'
 export interface Series {
   id: string
   project_id: string
+  title: string
   sort_index: number
   thumbnail: string | null
   duration: number
