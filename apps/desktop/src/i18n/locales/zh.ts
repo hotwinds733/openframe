@@ -210,6 +210,8 @@ export default {
     shotMoveStatic: '固定',
     shotMovePushIn: '推进',
     taskQueueTitle: '任务队列',
+    taskQueueClear: '清除',
+    taskQueueClearConfirm: '清除排队和已完成任务？正在执行的任务会继续运行。',
     taskQueueEmpty: '暂无任务',
     taskQueued: '排队中',
     taskRunning: '执行中',

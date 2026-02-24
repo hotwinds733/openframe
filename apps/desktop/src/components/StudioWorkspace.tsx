@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Clock3, Loader2, ListChecks, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Loader2, ListChecks, Trash2, XCircle } from 'lucide-react'
 import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
 import PQueue from 'p-queue'
 import { ScriptEditor } from './ScriptEditor'
@@ -1037,6 +1037,13 @@ export function StudioWorkspace({
     return <XCircle size={12} className="text-error" />
   }
 
+  function clearTaskQueue() {
+    const shouldClear = window.confirm(t('projectLibrary.taskQueueClearConfirm'))
+    if (!shouldClear) return
+    queueRef.current.clear()
+    setTaskQueue((prev) => prev.filter((task) => task.status === 'running'))
+  }
+
   return (
     <main className="h-full w-full overflow-hidden flex flex-col bg-linear-to-br from-base-200/40 via-base-100 to-base-200/30 text-base-content">
       <div className="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur">
@@ -1144,17 +1151,23 @@ export function StudioWorkspace({
 
       <div className="fixed right-4 bottom-4 z-20 w-[320px]">
         <div className="rounded-xl border border-base-300 bg-base-100/95 backdrop-blur shadow-lg overflow-hidden">
-          <button
-            type="button"
-            className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium border-b border-base-300"
-            onClick={() => setQueueOpen((prev) => !prev)}
-          >
-            <span className="inline-flex items-center gap-2">
+          <div className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium border-b border-base-300">
+            <button type="button" className="inline-flex items-center gap-2" onClick={() => setQueueOpen((prev) => !prev)}>
               <ListChecks size={14} />
               {t('projectLibrary.taskQueueTitle')}
-            </span>
-            <span className="text-xs text-base-content/60">{taskQueue.length}</span>
-          </button>
+              <span className="text-xs text-base-content/60">{taskQueue.length}</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={clearTaskQueue}
+              disabled={taskQueue.length === 0}
+              title={t('projectLibrary.taskQueueClear')}
+            >
+              <Trash2 size={12} />
+              {t('projectLibrary.taskQueueClear')}
+            </button>
+          </div>
 
           {queueOpen ? (
             <div className="max-h-56 overflow-auto p-2 space-y-1.5">

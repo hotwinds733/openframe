@@ -210,6 +210,8 @@ export default {
     shotMoveStatic: 'Static',
     shotMovePushIn: 'Push-in',
     taskQueueTitle: 'Task Queue',
+    taskQueueClear: 'Clear',
+    taskQueueClearConfirm: 'Clear queued and completed tasks? Running tasks will continue.',
     taskQueueEmpty: 'No tasks',
     taskQueued: 'Queued',
     taskRunning: 'Running',
