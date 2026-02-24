@@ -198,13 +198,13 @@ export function ProductionPanel({
         <h3 className="text-sm font-semibold">{t('projectLibrary.productionParams')}</h3>
         <label className="form-control flex flex-col items-start gap-1">
           <span className="text-xs text-base-content/70">{t('settings.aiVideoModel')}</span>
-          <select className="select select-bordered w-full" value={selectedVideoModelKey} onChange={(e) => onVideoModelChange(e.target.value)}>
-            {videoModelOptions.length === 0 ? (
-              <option value="">{t('projectLibrary.aiModelEmpty')}</option>
-            ) : (
-              videoModelOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)
-            )}
-          </select>
+            <select className="select select-bordered w-full" value={selectedVideoModelKey} onChange={(e) => onVideoModelChange(e.target.value)}>
+              {videoModelOptions.length === 0 ? (
+                <option value="">{t('projectLibrary.aiVideoModelEmpty')}</option>
+              ) : (
+                videoModelOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)
+              )}
+            </select>
         </label>
 
         <label className="form-control flex flex-col items-start gap-1">
