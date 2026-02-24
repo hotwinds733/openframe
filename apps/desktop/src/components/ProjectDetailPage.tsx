@@ -86,6 +86,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         projectId={projectId}
         seriesId={selectedSeries?.id ?? ''}
         projectName={project.name}
+        projectRatio={project.video_ratio}
         projectCategory={project.category}
         projectGenre={project.genre}
         seriesTitle={selectedSeries?.title ?? t('projectLibrary.seriesNo')}

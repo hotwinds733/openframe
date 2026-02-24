@@ -124,7 +124,11 @@ contextBridge.exposeInMainWorld('aiAPI', {
   embedBatch: (texts: string[]): Promise<number[][] | null> =>
     ipcRenderer.invoke('ai:embedBatch', texts),
   generateImage: (
-    params: { prompt: string | { text?: string; images: Array<string | number[]> }; modelKey?: string },
+    params: {
+      prompt: string | { text?: string; images: Array<string | number[]> }
+      modelKey?: string
+      options?: { size?: string }
+    },
   ): Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('ai:generateImage', params),
   styleAgentChat: (

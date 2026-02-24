@@ -4,13 +4,11 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
-import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
   Bold,
   Check,
-  ChevronDown,
   Heading1,
   Heading2,
   Italic,
@@ -51,11 +49,6 @@ type AutocompleteDraft = {
 
 type MenuAnchor = {
   pos: number
-}
-
-type TextModelOption = {
-  key: string
-  label: string
 }
 
 type AutocompleteGhostMeta = {
@@ -126,29 +119,13 @@ function createAutocompleteGhostPlugin() {
   })
 }
 
-function getTextModelOptions(config: AIConfig): TextModelOption[] {
-  const result: TextModelOption[] = []
-  for (const provider of AI_PROVIDERS) {
-    const providerCfg = config.providers[provider.id]
-    if (!providerCfg?.enabled) continue
-    const builtin = provider.models.filter((m) => m.type === 'text')
-    const custom = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'text')
-    for (const model of [...builtin, ...custom]) {
-      const key = `${provider.id}:${model.id}`
-      if (!config.enabledModels?.[key]) continue
-      if (config.hiddenModels?.[key]) continue
-      result.push({ key, label: `${provider.name} / ${model.name || model.id}` })
-    }
-  }
-  return result
-}
-
 interface ScriptEditorProps {
   content: string
   onContentChange: (content: string) => void
+  selectedTextModelKey: string
 }
 
-export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
+export function ScriptEditor({ content, onContentChange, selectedTextModelKey }: ScriptEditorProps) {
   const { t } = useTranslation()
   const [editorTick, setEditorTick] = useState(0)
   const [aiBusy, setAiBusy] = useState(false)
@@ -157,9 +134,6 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
   const [expandDraft, setExpandDraft] = useState<ExpandDraft | null>(null)
   const [autocompleteDraft, setAutocompleteDraft] = useState<AutocompleteDraft | null>(null)
   const [contextMenu, setContextMenu] = useState<MenuAnchor | null>(null)
-  const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const [modelOptions, setModelOptions] = useState<TextModelOption[]>([])
-  const [selectedModelKey, setSelectedModelKey] = useState('')
   const activeStreamRequestIdRef = useRef<string | null>(null)
   const activeStreamKindRef = useRef<'scene.expand' | 'scene.autocomplete' | null>(null)
   const autocompleteTimerRef = useRef<number | null>(null)
@@ -168,7 +142,6 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
   const lastSavedContentRef = useRef(content)
   const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
-  const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const initialContentType = useMemo<'html' | 'markdown'>(
     () => (isLikelyHtml(content) ? 'html' : 'markdown'),
     [content],
@@ -229,31 +202,6 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
   function clearAutocompleteDraft() {
     setAutocompleteDraft(null)
   }
-
-  const selectedModelLabel = useMemo(() => {
-    const hit = modelOptions.find((opt) => opt.key === selectedModelKey)
-    return hit?.label ?? t('projectLibrary.aiModelEmpty')
-  }, [modelOptions, selectedModelKey, t])
-
-  useEffect(() => {
-    window.aiAPI
-      .getConfig()
-      .then((cfg) => {
-        const config = cfg as AIConfig
-        const options = getTextModelOptions(config)
-        setModelOptions(options)
-        const defaultKey = config.models?.text ?? ''
-        if (defaultKey && options.some((o) => o.key === defaultKey)) {
-          setSelectedModelKey(defaultKey)
-        } else {
-          setSelectedModelKey(options[0]?.key ?? '')
-        }
-      })
-      .catch(() => {
-        setModelOptions([])
-        setSelectedModelKey('')
-      })
-  }, [])
 
   const draftOverlayStyle = useMemo(() => {
     if (!expandDraft || !editor || !editorPaneRef.current) return null
@@ -407,7 +355,6 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
 
     setAiError('')
     setContextMenu(null)
-    setModelMenuOpen(false)
     clearActiveStream()
     clearAutocompleteDraft()
 
@@ -415,7 +362,7 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
       const start = await window.aiAPI.scriptToolkitStreamStart({
         action: 'scene.autocomplete',
         context,
-        modelKey: selectedModelKey || undefined,
+        modelKey: selectedTextModelKey || undefined,
       })
 
       if (!start.ok) {
@@ -434,7 +381,7 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
     } catch {
       if (manual) setAiError(t('projectLibrary.aiToolkitFailed'))
     }
-  }, [aiBusy, buildAutocompleteContext, editor, expandDraft, selectedModelKey, t])
+  }, [aiBusy, buildAutocompleteContext, editor, expandDraft, selectedTextModelKey, t])
 
   useEffect(() => {
     if (!editor) return
@@ -497,14 +444,13 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
     setAiError('')
     setAiReport('')
     setContextMenu(null)
-    setModelMenuOpen(false)
     clearAutocompleteTimer()
     clearAutocompleteDraft()
     if (action !== 'scene.expand') setExpandDraft(null)
 
     try {
       if (action === 'scene.expand') {
-        const start = await window.aiAPI.scriptToolkitStreamStart({ action, context, modelKey: selectedModelKey || undefined })
+        const start = await window.aiAPI.scriptToolkitStreamStart({ action, context, modelKey: selectedTextModelKey || undefined })
         if (!start.ok) {
           setAiError(start.error)
           return
@@ -518,7 +464,7 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
           status: 'streaming',
         })
       } else {
-        const result = await window.aiAPI.scriptToolkit({ action, context, modelKey: selectedModelKey || undefined })
+        const result = await window.aiAPI.scriptToolkit({ action, context, modelKey: selectedTextModelKey || undefined })
         if (!result.ok) {
           setAiError(result.error)
           return
@@ -641,9 +587,7 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
     const onGlobalMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null
       if (contextMenuRef.current && target && contextMenuRef.current.contains(target)) return
-      if (modelMenuRef.current && target && modelMenuRef.current.contains(target)) return
       setContextMenu(null)
-      setModelMenuOpen(false)
     }
     window.addEventListener('mousedown', onGlobalMouseDown)
     return () => window.removeEventListener('mousedown', onGlobalMouseDown)
@@ -673,40 +617,6 @@ export function ScriptEditor({ content, onContentChange }: ScriptEditorProps) {
         <div className="w-px h-5 bg-base-300 mx-1" />
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => editor?.chain().focus().undo().run()} disabled={!editor?.can().chain().focus().undo().run()} aria-label="Undo"><Undo2 size={16} /></button>
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => editor?.chain().focus().redo().run()} disabled={!editor?.can().chain().focus().redo().run()} aria-label="Redo"><Redo2 size={16} /></button>
-        <div className="w-px h-5 bg-base-300 mx-1" />
-        <div ref={modelMenuRef} className="relative">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-200/70 hover:bg-base-200 px-3 py-1.5 text-xs max-w-[260px]"
-            onClick={() => setModelMenuOpen((v) => !v)}
-            aria-label={t('projectLibrary.aiModel')}
-          >
-            <span className="truncate max-w-[210px]">{selectedModelLabel}</span>
-            <ChevronDown size={14} className={`${modelMenuOpen ? 'rotate-180' : ''} transition-transform`} />
-          </button>
-
-          {modelMenuOpen ? (
-            <div className="absolute right-0 top-[calc(100%+10px)] w-72 rounded-2xl border border-base-300 bg-base-100 shadow-2xl p-1.5 z-30">
-              {modelOptions.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-base-content/60">{t('projectLibrary.aiModelEmpty')}</div>
-              ) : (
-                modelOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    className={`w-full text-left rounded-xl px-3 py-2 text-sm hover:bg-base-200 transition-colors ${selectedModelKey === opt.key ? 'bg-base-200 font-medium' : ''}`}
-                    onClick={() => {
-                      setSelectedModelKey(opt.key)
-                      setModelMenuOpen(false)
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
       </div>
 
       {aiError ? <div className="px-3 py-2 text-xs text-error border-b border-base-300">{aiError}</div> : null}

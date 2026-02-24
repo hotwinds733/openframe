@@ -306,7 +306,11 @@ export function registerAIHandlers() {
     'ai:generateImage',
     async (
       _event,
-      params: { prompt: string | { text?: string; images: Array<string | number[]> }; modelKey?: string },
+      params: {
+        prompt: string | { text?: string; images: Array<string | number[]> }
+        modelKey?: string
+        options?: { size?: string }
+      },
     ): Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }> => {
       const config = store.get('ai_config') as AIConfig
       const selectedModel = params.modelKey
@@ -329,6 +333,7 @@ export function registerAIHandlers() {
         const generated = await generateImageWithProviderSupport({
           model,
           prompt: params.prompt,
+          options: params.options,
         })
         return {
           ok: true,

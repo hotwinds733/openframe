@@ -3,11 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { FolderOpen, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, User, X } from 'lucide-react'
 import type { Character } from '../db/characters_collection'
 
-type ModelOption = {
-  key: string
-  label: string
-}
-
 type CreateCharacterDraft = {
   name: string
   gender: '' | 'male' | 'female' | 'other'
@@ -25,12 +20,6 @@ interface CharacterPanelProps {
   extractingFromDraft: boolean
   extractingRegenerate: boolean
   characterBusyId: string | null
-  textModelOptions: ModelOption[]
-  selectedTextModelKey: string
-  onTextModelChange: (modelKey: string) => void
-  imageModelOptions: ModelOption[]
-  selectedImageModelKey: string
-  onImageModelChange: (modelKey: string) => void
   onAddCharacter: (draft: CreateCharacterDraft) => void
   onUpdateCharacter: (id: string, draft: CreateCharacterDraft) => void
   onSmartGenerateCharacter: (
@@ -40,6 +29,8 @@ interface CharacterPanelProps {
   onRegenerateFromScript: () => void
   onDeleteCharacter: (id: string, name: string) => void
   onGenerateTurnaround: (id: string) => void
+  onGenerateAllImages: () => void
+  generatingAllImages: boolean
 }
 
 function getThumbnailSrc(value: string | null): string | null {
@@ -53,12 +44,6 @@ export function CharacterPanel({
   extractingFromDraft,
   extractingRegenerate,
   characterBusyId,
-  textModelOptions,
-  selectedTextModelKey,
-  onTextModelChange,
-  imageModelOptions,
-  selectedImageModelKey,
-  onImageModelChange,
   onAddCharacter,
   onUpdateCharacter,
   onSmartGenerateCharacter,
@@ -66,6 +51,8 @@ export function CharacterPanel({
   onRegenerateFromScript,
   onDeleteCharacter,
   onGenerateTurnaround,
+  onGenerateAllImages,
+  generatingAllImages,
 }: CharacterPanelProps) {
   const { t } = useTranslation()
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
@@ -235,42 +222,15 @@ export function CharacterPanel({
             <RefreshCw size={12} />
             {extractingRegenerate ? t('projectLibrary.aiStreaming') : t('projectLibrary.characterRegenerate')}
           </button>
-          <label className="input input-sm input-bordered flex items-center gap-2 w-56">
-            <ScrollText size={12} className="text-base-content/60" />
-            <select
-              className="w-full bg-transparent outline-none"
-              value={selectedTextModelKey}
-              onChange={(event) => onTextModelChange(event.target.value)}
-            >
-              {textModelOptions.length === 0 ? (
-                <option value="">{t('projectLibrary.aiModelEmpty')}</option>
-              ) : (
-                textModelOptions.map((model) => (
-                  <option key={model.key} value={model.key}>
-                    {model.label}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-          <label className="input input-sm input-bordered flex items-center gap-2 w-56">
-            <Sparkles size={12} className="text-base-content/60" />
-            <select
-              className="w-full bg-transparent outline-none"
-              value={selectedImageModelKey}
-              onChange={(event) => onImageModelChange(event.target.value)}
-            >
-              {imageModelOptions.length === 0 ? (
-                <option value="">{t('projectLibrary.characterModelEmpty')}</option>
-              ) : (
-                imageModelOptions.map((model) => (
-                  <option key={model.key} value={model.key}>
-                    {model.label}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={onGenerateAllImages}
+            disabled={extractingFromDraft || extractingRegenerate || generatingAllImages || characterBusyId !== null}
+          >
+            <Sparkles size={12} />
+            {generatingAllImages ? t('projectLibrary.aiStreaming') : t('projectLibrary.characterGenerateAllImages')}
+          </button>
         </div>
       </div>
 

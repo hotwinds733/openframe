@@ -2,11 +2,6 @@ import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Clapperboard, FolderOpen, MapPin, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, X } from 'lucide-react'
 
-type ModelOption = {
-  key: string
-  label: string
-}
-
 type SceneCard = {
   id: string
   series_id: string
@@ -37,12 +32,6 @@ interface ScenePanelProps {
   extractingFromScript: boolean
   extractingRegenerate: boolean
   sceneBusyId: string | null
-  textModelOptions: ModelOption[]
-  selectedTextModelKey: string
-  onTextModelChange: (modelKey: string) => void
-  imageModelOptions: ModelOption[]
-  selectedImageModelKey: string
-  onImageModelChange: (modelKey: string) => void
   onAddScene: (draft: CreateSceneDraft) => void
   onUpdateScene: (id: string, draft: CreateSceneDraft) => void
   onSmartGenerateScene: (draft: CreateSceneDraft) => Promise<{ ok: true; draft: CreateSceneDraft } | { ok: false; error: string }>
@@ -50,6 +39,8 @@ interface ScenePanelProps {
   onRegenerateFromScript: () => void
   onDeleteScene: (id: string, title: string) => void
   onGenerateSceneImage: (id: string) => void
+  onGenerateAllImages: () => void
+  generatingAllImages: boolean
 }
 
 function getThumbnailSrc(value: string | null): string | null {
@@ -63,12 +54,6 @@ export function ScenePanel({
   extractingFromScript,
   extractingRegenerate,
   sceneBusyId,
-  textModelOptions,
-  selectedTextModelKey,
-  onTextModelChange,
-  imageModelOptions,
-  selectedImageModelKey,
-  onImageModelChange,
   onAddScene,
   onUpdateScene,
   onSmartGenerateScene,
@@ -76,6 +61,8 @@ export function ScenePanel({
   onRegenerateFromScript,
   onDeleteScene,
   onGenerateSceneImage,
+  onGenerateAllImages,
+  generatingAllImages,
 }: ScenePanelProps) {
   const { t } = useTranslation()
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
@@ -197,18 +184,15 @@ export function ScenePanel({
             <RefreshCw size={12} />
             {extractingRegenerate ? t('projectLibrary.aiStreaming') : t('projectLibrary.sceneRegenerate')}
           </button>
-          <label className="input input-sm input-bordered flex items-center gap-2 w-56">
-            <ScrollText size={12} className="text-base-content/60" />
-            <select className="w-full bg-transparent outline-none" value={selectedTextModelKey} onChange={(event) => onTextModelChange(event.target.value)}>
-              {textModelOptions.length === 0 ? <option value="">{t('projectLibrary.aiModelEmpty')}</option> : textModelOptions.map((model) => <option key={model.key} value={model.key}>{model.label}</option>)}
-            </select>
-          </label>
-          <label className="input input-sm input-bordered flex items-center gap-2 w-56">
-            <Sparkles size={12} className="text-base-content/60" />
-            <select className="w-full bg-transparent outline-none" value={selectedImageModelKey} onChange={(event) => onImageModelChange(event.target.value)}>
-              {imageModelOptions.length === 0 ? <option value="">{t('projectLibrary.characterModelEmpty')}</option> : imageModelOptions.map((model) => <option key={model.key} value={model.key}>{model.label}</option>)}
-            </select>
-          </label>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={onGenerateAllImages}
+            disabled={extractingFromScript || extractingRegenerate || generatingAllImages || sceneBusyId !== null}
+          >
+            <Sparkles size={12} />
+            {generatingAllImages ? t('projectLibrary.aiStreaming') : t('projectLibrary.sceneGenerateAllImages')}
+          </button>
         </div>
       </div>
 

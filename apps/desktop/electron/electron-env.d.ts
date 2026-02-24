@@ -95,7 +95,11 @@ interface Window {
     testConnection: (params: { providerId: string; modelId: string; apiKey: string; baseUrl?: string }) => Promise<{ ok: boolean; error?: string }>
     embed: (text: string) => Promise<number[] | null>
     embedBatch: (texts: string[]) => Promise<number[][] | null>
-    generateImage: (params: { prompt: string | { text?: string; images: Array<string | number[]> }; modelKey?: string }) => Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }>
+    generateImage: (params: {
+      prompt: string | { text?: string; images: Array<string | number[]> }
+      modelKey?: string
+      options?: { size?: string }
+    }) => Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }>
     styleAgentChat: (params: {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>
       draft: { name: string; code: string; description: string; prompt: string }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Clock3, Loader2, ListChecks, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Loader2, ListChecks, ScrollText, Sparkles, Trash2, XCircle } from 'lucide-react'
 import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
 import PQueue from 'p-queue'
 import { ScriptEditor } from './ScriptEditor'
@@ -40,6 +40,7 @@ interface StudioWorkspaceProps {
   projectId: string
   seriesId: string
   projectName: string
+  projectRatio: '16:9' | '9:16'
   projectCategory: string
   projectGenre: string
   seriesTitle: string
@@ -50,6 +51,7 @@ export function StudioWorkspace({
   projectId,
   seriesId,
   projectName,
+  projectRatio,
   projectCategory,
   projectGenre,
   seriesTitle,
@@ -67,6 +69,8 @@ export function StudioWorkspace({
   const [seriesScenes, setSeriesScenes] = useState<Scene[]>([])
   const [shotError, setShotError] = useState('')
   const [seriesShots, setSeriesShots] = useState<ShotCard[]>([])
+  const [generatingCharacterImages, setGeneratingCharacterImages] = useState(false)
+  const [generatingSceneImages, setGeneratingSceneImages] = useState(false)
   const [generatingShotsFromScript, setGeneratingShotsFromScript] = useState(false)
   const [generatingShotImages, setGeneratingShotImages] = useState(false)
   const [generatingShotId, setGeneratingShotId] = useState<string | null>(null)
@@ -77,6 +81,7 @@ export function StudioWorkspace({
   const [selectedTextModelKey, setSelectedTextModelKey] = useState('')
   const [imageModelOptions, setImageModelOptions] = useState<Array<{ key: string; label: string }>>([])
   const [selectedImageModelKey, setSelectedImageModelKey] = useState('')
+  const projectImageSize = projectRatio === '9:16' ? '928*1664' : '1664*928'
 
   useEffect(() => {
     let active = true
@@ -547,6 +552,31 @@ export function StudioWorkspace({
     }
   }
 
+  async function generateAllCharacterImages() {
+    if (!projectCharacters.length) {
+      setCharacterError(t('projectLibrary.characterEmptyHint'))
+      return
+    }
+
+    setGeneratingCharacterImages(true)
+    setCharacterError('')
+
+    let remaining = projectCharacters.length
+    for (const character of [...projectCharacters]) {
+      const taskTitle = `${t('projectLibrary.characterGenerateTurnaround')} · ${character.name || t('projectLibrary.characterPanelTitle')}`
+      enqueueTask(taskTitle, async () => {
+        try {
+          await handleGenerateTurnaround(character.id)
+        } finally {
+          remaining -= 1
+          if (remaining <= 0) {
+            setGeneratingCharacterImages(false)
+          }
+        }
+      })
+    }
+  }
+
   function normalizeSceneTitle(value: string): string {
     return value.trim().toLowerCase()
   }
@@ -758,7 +788,11 @@ export function StudioWorkspace({
         `Shot notes: ${scene.shot_notes || 'unknown'}`,
       ].join('\n')
 
-      const result = await window.aiAPI.generateImage({ prompt, modelKey: selectedImageModelKey || undefined })
+      const result = await window.aiAPI.generateImage({
+        prompt,
+        modelKey: selectedImageModelKey || undefined,
+        options: { size: projectImageSize },
+      })
       if (!result.ok) {
         setSceneError(result.error)
         return
@@ -776,6 +810,31 @@ export function StudioWorkspace({
       setSceneError(t('projectLibrary.aiToolkitFailed'))
     } finally {
       setSceneBusyId(null)
+    }
+  }
+
+  async function generateAllSceneImages() {
+    if (!seriesScenes.length) {
+      setSceneError(t('projectLibrary.sceneEmptyHint'))
+      return
+    }
+
+    setGeneratingSceneImages(true)
+    setSceneError('')
+
+    let remaining = seriesScenes.length
+    for (const scene of [...seriesScenes]) {
+      const taskTitle = `${t('projectLibrary.sceneGenerateImage')} · ${scene.title || t('projectLibrary.sceneCardUntitled')}`
+      enqueueTask(taskTitle, async () => {
+        try {
+          await handleGenerateSceneImage(scene.id)
+        } finally {
+          remaining -= 1
+          if (remaining <= 0) {
+            setGeneratingSceneImages(false)
+          }
+        }
+      })
     }
   }
 
@@ -944,6 +1003,7 @@ export function StudioWorkspace({
       const result = await window.aiAPI.generateImage({
         prompt: referenceImages.length > 0 ? { text: prompt, images: referenceImages } : prompt,
         modelKey: selectedImageModelKey || undefined,
+        options: { size: projectImageSize },
       })
 
       if (!result.ok) {
@@ -1035,6 +1095,7 @@ export function StudioWorkspace({
       const result = await window.aiAPI.generateImage({
         prompt: referenceImages.length > 0 ? { text: prompt, images: referenceImages } : prompt,
         modelKey: selectedImageModelKey || undefined,
+        options: { size: projectImageSize },
       })
 
       if (!result.ok) {
@@ -1077,6 +1138,46 @@ export function StudioWorkspace({
             <p className="truncate text-xs text-base-content/60">{seriesTitle}</p>
           </div>
 
+          <div className="absolute right-4 hidden xl:flex items-center gap-2">
+            <label className="input input-sm input-bordered flex items-center gap-2 w-56">
+              <ScrollText size={12} className="text-base-content/60" />
+              <select
+                className="w-full bg-transparent outline-none"
+                value={selectedTextModelKey}
+                onChange={(event) => setSelectedTextModelKey(event.target.value)}
+              >
+                {textModelOptions.length === 0 ? (
+                  <option value="">{t('projectLibrary.aiModelEmpty')}</option>
+                ) : (
+                  textModelOptions.map((model) => (
+                    <option key={model.key} value={model.key}>
+                      {model.label}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+
+            <label className="input input-sm input-bordered flex items-center gap-2 w-56">
+              <Sparkles size={12} className="text-base-content/60" />
+              <select
+                className="w-full bg-transparent outline-none"
+                value={selectedImageModelKey}
+                onChange={(event) => setSelectedImageModelKey(event.target.value)}
+              >
+                {imageModelOptions.length === 0 ? (
+                  <option value="">{t('projectLibrary.characterModelEmpty')}</option>
+                ) : (
+                  imageModelOptions.map((model) => (
+                    <option key={model.key} value={model.key}>
+                      {model.label}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          </div>
+
           <div className="flex items-center gap-2 text-xs overflow-x-auto px-2">
             {workflowSteps.map((step, idx) => (
               <button
@@ -1111,12 +1212,6 @@ export function StudioWorkspace({
             extractingFromDraft={extractMode === 'merge'}
             extractingRegenerate={extractMode === 'replace'}
             characterBusyId={characterBusyId}
-            textModelOptions={textModelOptions}
-            selectedTextModelKey={selectedTextModelKey}
-            onTextModelChange={setSelectedTextModelKey}
-            imageModelOptions={imageModelOptions}
-            selectedImageModelKey={selectedImageModelKey}
-            onImageModelChange={setSelectedImageModelKey}
             onAddCharacter={(draft) => void handleAddCharacter(draft)}
             onUpdateCharacter={(id, draft) => void handleUpdateCharacter(id, draft)}
             onSmartGenerateCharacter={handleSmartGenerateCharacter}
@@ -1124,6 +1219,8 @@ export function StudioWorkspace({
             onRegenerateFromScript={() => void handleRegenerateCharactersFromScript()}
             onDeleteCharacter={(id, name) => void handleDeleteCharacter(id, name)}
             onGenerateTurnaround={(id) => void handleGenerateTurnaround(id)}
+            onGenerateAllImages={() => void generateAllCharacterImages()}
+            generatingAllImages={generatingCharacterImages}
           />
         ) : showScenePanel ? (
           <ScenePanel
@@ -1131,12 +1228,6 @@ export function StudioWorkspace({
             extractingFromScript={sceneExtractMode === 'merge'}
             extractingRegenerate={sceneExtractMode === 'replace'}
             sceneBusyId={sceneBusyId}
-            textModelOptions={textModelOptions}
-            selectedTextModelKey={selectedTextModelKey}
-            onTextModelChange={setSelectedTextModelKey}
-            imageModelOptions={imageModelOptions}
-            selectedImageModelKey={selectedImageModelKey}
-            onImageModelChange={setSelectedImageModelKey}
             onAddScene={(draft) => void handleAddScene(draft)}
             onUpdateScene={(id, draft) => void handleUpdateScene(id, draft)}
             onSmartGenerateScene={handleSmartGenerateScene}
@@ -1144,6 +1235,8 @@ export function StudioWorkspace({
             onRegenerateFromScript={() => void handleRegenerateScenesFromScript()}
             onDeleteScene={(id, title) => void handleDeleteScene(id, title)}
             onGenerateSceneImage={(id) => void handleGenerateSceneImage(id)}
+            onGenerateAllImages={() => void generateAllSceneImages()}
+            generatingAllImages={generatingSceneImages}
           />
         ) : showShotPanel ? (
           <ShotPanel
@@ -1163,6 +1256,7 @@ export function StudioWorkspace({
         ) : (
           <ScriptEditor
             content={scriptContent}
+            selectedTextModelKey={selectedTextModelKey}
             onContentChange={(nextContent) => {
               if (!seriesId) return
               seriesCollection.update(seriesId, (draft) => {
