@@ -1,0 +1,89 @@
+import { createAlibaba } from '@ai-sdk/alibaba'
+import { stripTrailingSlash } from '../../../shared/utils/common'
+import { PROVIDER_BASE_URLS } from '../../constants'
+
+export function createQwenTextModel(modelId: string, apiKey?: string, baseURL?: string) {
+  const provider = createAlibaba({ apiKey, baseURL })
+  return provider(modelId)
+}
+
+export function createQwenVideoModel(modelId: string, apiKey?: string, baseURL?: string) {
+  return createAlibaba({ apiKey, baseURL }).video(modelId)
+}
+
+function toBaseUrl(baseURL?: string): string {
+  return stripTrailingSlash(baseURL || PROVIDER_BASE_URLS.qwen)
+}
+
+function extractImageUrl(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const row = payload as Record<string, unknown>
+  const output = row.output && typeof row.output === 'object' ? row.output as Record<string, unknown> : null
+  const choices = Array.isArray(output?.choices) ? output.choices : []
+  const firstChoice = choices[0] && typeof choices[0] === 'object' ? choices[0] as Record<string, unknown> : null
+  const message = firstChoice?.message && typeof firstChoice.message === 'object'
+    ? firstChoice.message as Record<string, unknown>
+    : null
+  const content = Array.isArray(message?.content) ? message.content : []
+  const firstContent = content[0] && typeof content[0] === 'object' ? content[0] as Record<string, unknown> : null
+  return typeof firstContent?.image === 'string' ? firstContent.image : null
+}
+
+export async function generateQwenImage(args: {
+  apiKey: string
+  modelId: string
+  prompt: string
+  baseURL?: string
+  size?: string
+}): Promise<{ data: number[]; mediaType: string }> {
+  const url = `${toBaseUrl(args.baseURL)}/services/aigc/multimodal-generation/generation`
+  const body = {
+    model: args.modelId,
+    input: {
+      messages: [
+        {
+          role: 'user',
+          content: [{ text: args.prompt }],
+        },
+      ],
+    },
+    parameters: {
+      n: 1,
+      prompt_extend: true,
+      watermark: false,
+      size: args.size || '1664*928',
+    },
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${args.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const text = await res.text().catch(() => '')
+  if (!res.ok) {
+    throw new Error(text || `Qwen image generation failed: ${res.status}`)
+  }
+
+  const payload = text ? JSON.parse(text) as unknown : {}
+  const imageUrl = extractImageUrl(payload)
+  if (!imageUrl) {
+    throw new Error('Qwen image generation response missing output image URL.')
+  }
+
+  const fileRes = await fetch(imageUrl)
+  if (!fileRes.ok) {
+    throw new Error(`Failed to download generated image: ${fileRes.status}`)
+  }
+
+  const mediaType = fileRes.headers.get('content-type') || 'image/png'
+  const bytes = new Uint8Array(await fileRes.arrayBuffer())
+  return {
+    data: Array.from(bytes),
+    mediaType,
+  }
+}

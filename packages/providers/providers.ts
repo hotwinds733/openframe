@@ -1,3 +1,5 @@
+import { PROVIDER_BASE_URLS } from './constants'
+
 export type ModelType = 'text' | 'image' | 'video' | 'embedding'
 
 export interface ModelDef {
@@ -162,7 +164,7 @@ export const AI_PROVIDERS: ProviderDef[] = [
     id: 'volcengine',
     sdkPackage: '@ai-sdk/openai-compatible',
     name: 'Volcengine',
-    defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    defaultBaseUrl: PROVIDER_BASE_URLS.volcengine,
     models: [
       { id: 'doubao-1.5-pro-32k',  name: 'Doubao 1.5 Pro 32K',  type: 'text' },
       { id: 'doubao-1.5-lite-32k', name: 'Doubao 1.5 Lite 32K', type: 'text' },
@@ -178,7 +180,7 @@ export const AI_PROVIDERS: ProviderDef[] = [
     sdkPackage: '@ai-sdk/openai-compatible',
     name: 'Ollama',
     noApiKey: true,
-    defaultBaseUrl: 'http://localhost:11434',
+    defaultBaseUrl: PROVIDER_BASE_URLS.ollama,
     models: [
       { id: 'llama3.2:3b',            name: 'Llama 3.2 3B',      type: 'text' },
       { id: 'llama3.1:8b',            name: 'Llama 3.1 8B',      type: 'text' },

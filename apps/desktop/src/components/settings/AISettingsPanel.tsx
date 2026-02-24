@@ -4,6 +4,9 @@ import { Eye, EyeOff, X, Plus, Upload, Download, CheckCircle, XCircle, Loader, P
 import {
   AI_PROVIDERS,
   providerColor,
+  getSelectableModelsByType,
+  getEnabledProviderModels,
+  getVisibleProviderModels,
   type AIConfig,
   type ModelDef,
   type ModelType,
@@ -45,10 +48,17 @@ function ProviderAvatar({ id, name, size = 24 }: { id: string; name: string; siz
   )
 }
 
-const MODEL_TYPES: { type: ModelType; labelKey: string }[] = [
+const DEFAULT_MODEL_TYPES: { type: ModelType; labelKey: string }[] = [
   { type: 'text',  labelKey: 'settings.aiTextModel'  },
   { type: 'image', labelKey: 'settings.aiImageModel' },
   { type: 'video', labelKey: 'settings.aiVideoModel' },
+]
+
+const MODEL_TYPE_SECTIONS: { type: ModelType; labelKey: string }[] = [
+  { type: 'text', labelKey: 'settings.aiTextModel' },
+  { type: 'image', labelKey: 'settings.aiImageModel' },
+  { type: 'video', labelKey: 'settings.aiVideoModel' },
+  { type: 'embedding', labelKey: 'settings.aiEmbeddingModel' },
 ]
 
 export const EMBEDDING_PROVIDERS = AI_PROVIDERS.filter((p) =>
@@ -171,7 +181,7 @@ function DefaultModelsPanel({ config, onChange }: { config: AIConfig; onChange: 
       </div>
 
       <div className="flex flex-col gap-3">
-        {MODEL_TYPES.map(({ type, labelKey }) => (
+        {DEFAULT_MODEL_TYPES.map(({ type, labelKey }) => (
           <div key={type} className="flex items-center justify-between gap-4">
             <span className="text-sm shrink-0">{t(labelKey)}</span>
             <select
@@ -180,19 +190,12 @@ function DefaultModelsPanel({ config, onChange }: { config: AIConfig; onChange: 
               onChange={(e) => updateModel(type, e.target.value)}
             >
               <option value="">{t('settings.aiNoModel')}</option>
-              {AI_PROVIDERS.map((provider) => {
-                const providerCfg = config.providers[provider.id]
-                if (!providerCfg?.enabled) return null
-                const builtinModels = provider.models.filter((m) => m.type === type)
-                const customModels = (config.customModels[provider.id] ?? []).filter((m) => m.type === type)
-                const models = [...builtinModels, ...customModels]
-                if (models.length === 0) return null
+              {getSelectableModelsByType(config, type).map(({ provider, models }) => {
                 return (
                   <optgroup key={provider.id} label={provider.name}>
                     {models.map((m) => {
-                      const key = `${provider.id}:${m.id}`
                       return (
-                        <option key={m.id} value={key} disabled={!config.enabledModels?.[key]}>
+                        <option key={m.id} value={`${provider.id}:${m.id}`}>
                           {m.name}
                         </option>
                       )
@@ -272,11 +275,7 @@ export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChang
         </div>
       ) : (
         availableProviders.map((provider) => {
-          const embeddingModels = [
-            ...provider.models.filter((m) => m.type === 'embedding'),
-            ...(config.customModels[provider.id] ?? []).filter((m) => m.type === 'embedding'),
-          ].filter((m) => !!config.enabledModels?.[`${provider.id}:${m.id}`])
-            .filter((m) => !config.hiddenModels?.[`${provider.id}:${m.id}`])
+          const embeddingModels = getEnabledProviderModels(provider.id, config, 'embedding')
           return (
             <div key={provider.id} className="flex flex-col">
               {/* Provider label */}
@@ -379,11 +378,13 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
   const [testModelId, setTestModelId] = useState<string>('')
 
   const cfg = config.providers[provider.id] ?? { apiKey: '', baseUrl: '', enabled: false }
-  const builtinModels = provider.models
   const customModels = config.customModels[provider.id] ?? []
-  const allModels = [...builtinModels, ...customModels].filter(
-    (m) => !config.hiddenModels?.[`${provider.id}:${m.id}`],
-  )
+  const visibleModels = getVisibleProviderModels(provider.id, config)
+  const modelsByType = MODEL_TYPE_SECTIONS.map(({ type, labelKey }) => ({
+    type,
+    labelKey,
+    models: visibleModels.filter((m) => m.type === type),
+  }))
 
   function updateCfg(patch: Partial<{ apiKey: string; baseUrl: string; enabled: boolean }>) {
     onChange({
@@ -422,7 +423,7 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
   }
 
   async function handleTestConnection() {
-    const modelId = testModelId || allModels.find((m) => m.type === 'text')?.id || allModels[0]?.id
+    const modelId = testModelId || visibleModels.find((m) => m.type === 'text')?.id || visibleModels[0]?.id
     if (!modelId) {
       setTestState('error')
       setTestError(t('settings.aiTestNoTextModel'))
@@ -497,6 +498,101 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
     setEditingModelId(null)
   }
 
+  function renderModelRow(model: ModelDef) {
+    const key = `${provider.id}:${model.id}`
+    const isEnabled = !!config.enabledModels?.[key]
+    const isEditing = editingModelId === model.id
+
+    if (isEditing) {
+      return (
+        <div key={model.id} className="flex gap-1.5 items-center p-2 bg-base-200 rounded-lg flex-wrap">
+          <input
+            className="input input-bordered input-xs flex-1 min-w-32 font-mono"
+            placeholder="Model ID"
+            value={editModel.id}
+            onChange={(e) => setEditModel((p) => ({ ...p, id: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingModelId(null) }}
+            autoFocus
+          />
+          <input
+            className="input input-bordered input-xs w-28"
+            placeholder={t('settings.aiModelName')}
+            value={editModel.name}
+            onChange={(e) => setEditModel((p) => ({ ...p, name: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingModelId(null) }}
+          />
+          <select
+            className="select select-bordered select-xs"
+            value={editModel.type}
+            onChange={(e) => setEditModel((p) => ({ ...p, type: e.target.value as ModelType, dimension: undefined }))}
+          >
+            <option value="text">Text</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="embedding">Embedding</option>
+          </select>
+          {editModel.type === 'embedding' && (
+            <input
+              type="number"
+              className="input input-bordered input-xs w-20"
+              placeholder={t('settings.aiModelDimension')}
+              value={editModel.dimension ?? ''}
+              min={1}
+              onChange={(e) => setEditModel((p) => ({ ...p, dimension: parseInt(e.target.value) || undefined }))}
+            />
+          )}
+          <button className="btn btn-primary btn-xs btn-square" onClick={handleSaveEdit}>
+            <Check size={12} />
+          </button>
+          <button className="btn btn-ghost btn-xs btn-square" onClick={() => setEditingModelId(null)}>
+            <X size={12} />
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        key={model.id}
+        className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 group"
+      >
+        <input
+          type="checkbox"
+          className="toggle toggle-primary toggle-xs shrink-0"
+          checked={isEnabled}
+          onChange={() => toggleModel(model.id)}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <span className="flex-1 text-sm truncate">{model.name}</span>
+        <code className="text-[10px] text-base-content/40 font-mono hidden md:block truncate max-w-36">
+          {model.id}
+        </code>
+        {model.type === 'embedding' && model.dimension && (
+          <span className="text-[10px] text-base-content/40 font-mono shrink-0">
+            {model.dimension}d
+          </span>
+        )}
+        <span className={`badge badge-xs ${typeBadgeClass(model.type)}`}>
+          {model.type}
+        </span>
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
+          <button
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={() => startEditModel(model)}
+          >
+            <PencilLine size={11} />
+          </button>
+          <button
+            className="btn btn-ghost btn-xs btn-square text-error"
+            onClick={() => removeModel(model)}
+          >
+            <X size={11} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
@@ -565,7 +661,7 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
               onChange={(e) => { setTestModelId(e.target.value); setTestState('idle') }}
             >
               <option value="">{t('settings.aiTestAutoModel')}</option>
-              {allModels.map((m) => (
+              {visibleModels.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
@@ -659,106 +755,16 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
 
           {/* Model list */}
           <div className="flex flex-col">
-            {allModels.map((model) => {
-              const key = `${provider.id}:${model.id}`
-              const isEnabled = !!config.enabledModels?.[key]
-              const isEditing = editingModelId === model.id
-
-              if (isEditing) {
-                return (
-                  <div key={model.id} className="flex gap-1.5 items-center p-2 bg-base-200 rounded-lg flex-wrap">
-                    <input
-                      className="input input-bordered input-xs flex-1 min-w-32 font-mono"
-                      placeholder="Model ID"
-                      value={editModel.id}
-                      onChange={(e) => setEditModel((p) => ({ ...p, id: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingModelId(null) }}
-                      autoFocus
-                    />
-                    <input
-                      className="input input-bordered input-xs w-28"
-                      placeholder={t('settings.aiModelName')}
-                      value={editModel.name}
-                      onChange={(e) => setEditModel((p) => ({ ...p, name: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingModelId(null) }}
-                    />
-                    <select
-                      className="select select-bordered select-xs"
-                      value={editModel.type}
-                      onChange={(e) => setEditModel((p) => ({ ...p, type: e.target.value as ModelType, dimension: undefined }))}
-                    >
-                      <option value="text">Text</option>
-                      <option value="image">Image</option>
-                      <option value="video">Video</option>
-                      <option value="embedding">Embedding</option>
-                    </select>
-                    {editModel.type === 'embedding' && (
-                      <input
-                        type="number"
-                        className="input input-bordered input-xs w-20"
-                        placeholder={t('settings.aiModelDimension')}
-                        value={editModel.dimension ?? ''}
-                        min={1}
-                        onChange={(e) => setEditModel((p) => ({ ...p, dimension: parseInt(e.target.value) || undefined }))}
-                      />
-                    )}
-                    <button className="btn btn-primary btn-xs btn-square" onClick={handleSaveEdit}>
-                      <Check size={12} />
-                    </button>
-                    <button className="btn btn-ghost btn-xs btn-square" onClick={() => setEditingModelId(null)}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                )
-              }
-
-              return (
-                <div
-                  key={model.id}
-                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 group"
-                >
-                  {/* Enable/disable toggle */}
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-primary toggle-xs shrink-0"
-                    checked={isEnabled}
-                    onChange={() => toggleModel(model.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  {/* Model name */}
-                  <span className="flex-1 text-sm truncate">{model.name}</span>
-                  {/* Model ID */}
-                  <code className="text-[10px] text-base-content/40 font-mono hidden md:block truncate max-w-36">
-                    {model.id}
-                  </code>
-                  {/* Dimension (embedding models) */}
-                  {model.type === 'embedding' && model.dimension && (
-                    <span className="text-[10px] text-base-content/40 font-mono shrink-0">
-                      {model.dimension}d
-                    </span>
-                  )}
-                  {/* Type badge */}
-                  <span className={`badge badge-xs ${typeBadgeClass(model.type)}`}>
-                    {model.type}
-                  </span>
-                  {/* Edit / Delete */}
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
-                    <button
-                      className="btn btn-ghost btn-xs btn-square"
-                      onClick={() => startEditModel(model)}
-                    >
-                      <PencilLine size={11} />
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-xs btn-square text-error"
-                      onClick={() => removeModel(model)}
-                    >
-                      <X size={11} />
-                    </button>
-                  </div>
+            {modelsByType.map((section) => (
+              <div key={section.type} className="flex flex-col gap-1.5">
+                <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-base-content/45">
+                  {t(section.labelKey)}
                 </div>
-              )
-            })}
+                {section.models.length === 0
+                  ? <div className="px-2 py-1 text-xs text-base-content/35">-</div>
+                  : section.models.map((model) => renderModelRow(model))}
+              </div>
+            ))}
           </div>
         </div>
 
