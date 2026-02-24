@@ -131,6 +131,14 @@ contextBridge.exposeInMainWorld('aiAPI', {
     },
   ): Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('ai:generateImage', params),
+  generateVideo: (
+    params: {
+      prompt: string | { text?: string; images?: Array<string | number[]> }
+      modelKey?: string
+      options?: { ratio?: string; durationSec?: number }
+    },
+  ): Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('ai:generateVideo', params),
   styleAgentChat: (
     params: {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>

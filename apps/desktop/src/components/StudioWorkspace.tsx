@@ -274,6 +274,12 @@ export function StudioWorkspace({
         return 'svg'
       case 'image/avif':
         return 'avif'
+      case 'video/mp4':
+        return 'mp4'
+      case 'video/webm':
+        return 'webm'
+      case 'video/quicktime':
+        return 'mov'
       default:
         return 'png'
     }
@@ -1221,11 +1227,86 @@ export function StudioWorkspace({
     }
   }
 
-  async function generateProductionVideo(shotId: string, _params: { durationSec: number; ratio: string; mode: 'single' | 'first_last' }) {
+  async function generateProductionVideo(shotId: string, params: { durationSec: number; ratio: string; mode: 'single' | 'first_last' }) {
+    const shot = seriesShots.find((item) => item.id === shotId)
+    if (!shot) return
+
     setProductionVideoBusyShotId(shotId)
     setShotError('')
     try {
-      setShotError(t('projectLibrary.productionVideoNotImplemented'))
+      const sceneMap = new Map(seriesScenes.map((scene) => [scene.id, scene]))
+      const characterMap = new Map(projectCharacters.map((character) => [character.id, character]))
+      const scene = sceneMap.get(shot.scene_id)
+      const characterNames = shot.character_ids
+        .map((cid) => characterMap.get(cid)?.name)
+        .filter(Boolean)
+        .join(', ')
+
+      const pair = productionFrames[shotId]
+      const referenceImages: string[] = []
+
+      if (params.mode === 'single') {
+        const middleRef = await readThumbnailAsBase64(shot.thumbnail)
+        if (!middleRef) {
+          setShotError(t('projectLibrary.productionNeedMiddleFrame'))
+          return
+        }
+        referenceImages.push(middleRef)
+      } else {
+        const firstRef = await readThumbnailAsBase64(pair?.first ?? null)
+        const lastRef = await readThumbnailAsBase64(pair?.last ?? null)
+        if (!firstRef || !lastRef) {
+          setShotError(t('projectLibrary.productionNeedFirstLastFrames'))
+          return
+        }
+        referenceImages.push(firstRef, lastRef)
+      }
+
+      const prompt = [
+        'Cinematic video generation for storyboard production, no watermark text.',
+        params.mode === 'single'
+          ? 'Generate a short coherent clip using the single reference frame as key visual anchor.'
+          : 'Generate a short coherent clip transitioning from first frame to last frame with continuity.',
+        `Project category: ${projectCategory || 'unknown'}`,
+        `Project style: ${projectGenre || 'unknown'}`,
+        `Shot title: ${shot.title || 'untitled shot'}`,
+        `Shot size: ${shot.shot_size || 'unknown'}`,
+        `Camera angle: ${shot.camera_angle || 'unknown'}`,
+        `Camera movement: ${shot.camera_move || 'unknown'}`,
+        `Action: ${shot.action || 'unknown'}`,
+        `Scene: ${scene?.title || 'unknown'}`,
+        `Location: ${scene?.location || 'unknown'}`,
+        `Time: ${scene?.time || 'unknown'}`,
+        `Mood: ${scene?.mood || 'unknown'}`,
+        characterNames ? `Characters in shot: ${characterNames}` : 'Characters in shot: none',
+      ].join('\n')
+
+      const result = await window.aiAPI.generateVideo({
+        prompt: { text: prompt, images: referenceImages },
+        modelKey: selectedVideoModelKey || undefined,
+        options: {
+          ratio: params.ratio,
+          durationSec: params.durationSec,
+        },
+      })
+
+      if (!result.ok) {
+        setShotError(result.error)
+        return
+      }
+
+      const bytes = new Uint8Array(result.data)
+      const ext = extFromMediaType(result.mediaType)
+      const savedPath = await window.thumbnailsAPI.save(bytes, ext)
+
+      setProductionFrames((prev) => ({
+        ...prev,
+        [shotId]: {
+          first: prev[shotId]?.first ?? null,
+          last: prev[shotId]?.last ?? null,
+          video: savedPath,
+        },
+      }))
     } finally {
       setProductionVideoBusyShotId(null)
     }

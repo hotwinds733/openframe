@@ -100,6 +100,11 @@ interface Window {
       modelKey?: string
       options?: { size?: string; ratio?: string }
     }) => Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }>
+    generateVideo: (params: {
+      prompt: string | { text?: string; images?: Array<string | number[]> }
+      modelKey?: string
+      options?: { ratio?: string; durationSec?: number }
+    }) => Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }>
     styleAgentChat: (params: {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>
       draft: { name: string; code: string; description: string; prompt: string }

@@ -5,12 +5,15 @@ import {
   createProviderModel,
   isLanguageModel,
   isImageModel,
+  isVideoModel,
   isCustomRestModel,
   getDefaultEmbeddingModel,
   getDefaultTextModel,
   getDefaultImageModel,
+  getDefaultVideoModel,
   createProviderModelWithType,
   generateImageWithProviderSupport,
+  generateVideoWithProviderSupport,
 } from '@openframe/providers/factory'
 import { DEFAULT_AI_CONFIG, type AIConfig } from '@openframe/providers'
 
@@ -350,6 +353,52 @@ export function registerAIHandlers() {
             error: 'Selected model does not support image generation in current provider SDK. Please choose another image model.',
           }
         }
+        return { ok: false, error: msg.split('\n')[0].slice(0, 200) }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    'ai:generateVideo',
+    async (
+      _event,
+      params: {
+        prompt: string | { text?: string; images?: Array<string | number[]> }
+        modelKey?: string
+        options?: { ratio?: string; durationSec?: number }
+      },
+    ): Promise<{ ok: true; data: number[]; mediaType: string } | { ok: false; error: string }> => {
+      const config = store.get('ai_config') as AIConfig
+      const selectedModel = params.modelKey
+        ? (() => {
+            const idx = params.modelKey!.indexOf(':')
+            if (idx === -1) return null
+            const providerId = params.modelKey!.slice(0, idx)
+            const modelId = params.modelKey!.slice(idx + 1)
+            return createProviderModelWithType(providerId, modelId, 'video', config)
+          })()
+        : null
+      const model = selectedModel ?? getDefaultVideoModel(config)
+
+      if (!model) return { ok: false, error: 'No default video model configured.' }
+      if (!isCustomRestModel(model) && !isVideoModel(model)) {
+        return { ok: false, error: 'Selected model is not a video model.' }
+      }
+
+      try {
+        const generated = await generateVideoWithProviderSupport({
+          model,
+          prompt: params.prompt,
+          options: params.options,
+        })
+        return {
+          ok: true,
+          data: generated.data,
+          mediaType: generated.mediaType,
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(err)
         return { ok: false, error: msg.split('\n')[0].slice(0, 200) }
       }
     },
