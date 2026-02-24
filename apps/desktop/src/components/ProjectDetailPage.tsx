@@ -84,7 +84,6 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       <StudioWorkspace
         projectName={project.name}
         seriesTitle={selectedSeries?.title ?? t('projectLibrary.seriesNo')}
-        onBack={() => navigate({ to: '/projects/$projectId', params: { projectId } })}
       />
     )
   }

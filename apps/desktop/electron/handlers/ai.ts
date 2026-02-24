@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { generateText, generateImage, embed, embedMany } from 'ai'
+import { generateText, generateImage, embed, embedMany, streamText } from 'ai'
 import { store } from '../store'
 import {
   createProviderModel,
@@ -14,6 +14,12 @@ import { DEFAULT_AI_CONFIG, type AIConfig } from '@openframe/providers'
 
 type StyleAgentMessage = { role: 'user' | 'assistant'; content: string }
 type StyleDraft = { name: string; code: string; description: string; prompt: string }
+type ScriptToolkitAction =
+  | 'scene.expand'
+  | 'scene.rewrite'
+  | 'scene.dialogue-polish'
+  | 'scene.pacing'
+  | 'scene.continuity-check'
 
 function extractJsonObject(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim()
@@ -49,6 +55,32 @@ function stripCliStyleParams(prompt: string): string {
     .replace(/\s--\w+(?:\s+\S+)?/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+function getScriptToolkitPrompt(action: ScriptToolkitAction, context: string, instruction?: string): string {
+  const actionPrompts: Record<ScriptToolkitAction, string> = {
+    'scene.expand':
+      'Expand the current scene by enriching action beats, environment details, and emotional texture while preserving the original story intent and chronology. Return only the revised scene text.',
+    'scene.rewrite':
+      'Rewrite the current scene for stronger readability and cinematic flow while keeping all core plot points and outcomes unchanged. Return only the rewritten scene text.',
+    'scene.dialogue-polish':
+      'Polish the dialogue in this scene to sound more natural and dramatic while preserving each character\'s intent. Keep scene actions intact. Return only the polished scene text.',
+    'scene.pacing':
+      'Diagnose pacing issues in this scene. Identify dragging lines, low-information paragraphs, and rhythm breaks. Return concise bullet points with actionable fixes.',
+    'scene.continuity-check':
+      'Check scene continuity: character states, time/space consistency, and prop/object continuity. Return concise bullet points with found issues and suggested fixes.',
+  }
+
+  return [
+    'You are an expert screenplay writing assistant.',
+    actionPrompts[action],
+    instruction ? `Extra instruction: ${instruction}` : '',
+    'Keep character names, scene semantics, and chronology coherent.',
+    'Do not include markdown code fences.',
+    `Content:\n${context}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function registerAIHandlers() {
@@ -212,6 +244,105 @@ export function registerAIHandlers() {
         const msg = err instanceof Error ? err.message : String(err)
         return { ok: false, error: msg.split('\n')[0].slice(0, 200) }
       }
+    },
+  )
+
+  ipcMain.handle(
+    'ai:scriptToolkit',
+    async (
+      _event,
+      params: { action: ScriptToolkitAction; context: string; instruction?: string; modelKey?: string },
+    ): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
+      const config = store.get('ai_config') as AIConfig
+      const selectedModel = params.modelKey
+        ? (() => {
+            const idx = params.modelKey!.indexOf(':')
+            if (idx === -1) return null
+            const providerId = params.modelKey!.slice(0, idx)
+            const modelId = params.modelKey!.slice(idx + 1)
+            return createProviderModelWithType(providerId, modelId, 'text', config)
+          })()
+        : null
+      const model = selectedModel && isLanguageModel(selectedModel) ? selectedModel : getDefaultTextModel(config)
+      if (!model || !isLanguageModel(model)) {
+        return { ok: false, error: 'No default text model configured.' }
+      }
+
+      const prompt = getScriptToolkitPrompt(params.action, params.context, params.instruction)
+
+      try {
+        const { text } = await generateText({ model, prompt })
+        return { ok: true, text: text.trim() }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: msg.split('\n')[0].slice(0, 200) }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    'ai:scriptToolkitStreamStart',
+    async (
+      event,
+      params: {
+        action: ScriptToolkitAction
+        context: string
+        instruction?: string
+        modelKey?: string
+      },
+    ): Promise<{ ok: true; requestId: string } | { ok: false; error: string }> => {
+      const config = store.get('ai_config') as AIConfig
+      const selectedModel = params.modelKey
+        ? (() => {
+            const idx = params.modelKey!.indexOf(':')
+            if (idx === -1) return null
+            const providerId = params.modelKey!.slice(0, idx)
+            const modelId = params.modelKey!.slice(idx + 1)
+            return createProviderModelWithType(providerId, modelId, 'text', config)
+          })()
+        : null
+      const model = selectedModel && isLanguageModel(selectedModel) ? selectedModel : getDefaultTextModel(config)
+      if (!model || !isLanguageModel(model)) {
+        return { ok: false, error: 'No default text model configured.' }
+      }
+
+      if (params.action !== 'scene.expand') {
+        return { ok: false, error: 'Streaming is currently supported only for scene.expand.' }
+      }
+
+      const requestId = crypto.randomUUID()
+      const prompt = getScriptToolkitPrompt(params.action, params.context, params.instruction)
+
+      void (async () => {
+        try {
+          const result = streamText({ model, prompt })
+          for await (const chunk of result.textStream) {
+            if (event.sender.isDestroyed()) return
+            event.sender.send('ai:scriptToolkitStreamChunk', {
+              requestId,
+              chunk,
+              done: false,
+            })
+          }
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('ai:scriptToolkitStreamChunk', {
+              requestId,
+              done: true,
+            })
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err)
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('ai:scriptToolkitStreamChunk', {
+              requestId,
+              done: true,
+              error: msg.split('\n')[0].slice(0, 200),
+            })
+          }
+        }
+      })()
+
+      return { ok: true, requestId }
     },
   )
 }

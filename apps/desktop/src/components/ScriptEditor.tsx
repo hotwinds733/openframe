@@ -1,0 +1,478 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { EditorContent, useEditor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
+import { useTranslation } from 'react-i18next'
+import {
+  Activity,
+  Bold,
+  Check,
+  ChevronDown,
+  Heading1,
+  Heading2,
+  Italic,
+  List,
+  ListOrdered,
+  MessageSquare,
+  Quote,
+  RefreshCcw,
+  Redo2,
+  ShieldCheck,
+  Square,
+  Undo2,
+  Wand2,
+  X,
+} from 'lucide-react'
+
+type SceneAction =
+  | 'scene.expand'
+  | 'scene.rewrite'
+  | 'scene.dialogue-polish'
+  | 'scene.pacing'
+  | 'scene.continuity-check'
+
+type ExpandDraft = {
+  insertPos: number
+  fullText: string
+  displayText: string
+  status: 'streaming' | 'done'
+}
+
+type MenuAnchor = {
+  pos: number
+}
+
+type TextModelOption = {
+  key: string
+  label: string
+}
+
+function getTextModelOptions(config: AIConfig): TextModelOption[] {
+  const result: TextModelOption[] = []
+  for (const provider of AI_PROVIDERS) {
+    const providerCfg = config.providers[provider.id]
+    if (!providerCfg?.enabled) continue
+    const builtin = provider.models.filter((m) => m.type === 'text')
+    const custom = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'text')
+    for (const model of [...builtin, ...custom]) {
+      const key = `${provider.id}:${model.id}`
+      if (!config.enabledModels?.[key]) continue
+      if (config.hiddenModels?.[key]) continue
+      result.push({ key, label: `${provider.name} / ${model.name || model.id}` })
+    }
+  }
+  return result
+}
+
+export function ScriptEditor() {
+  const { t } = useTranslation()
+  const [editorTick, setEditorTick] = useState(0)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const [aiReport, setAiReport] = useState('')
+  const [expandDraft, setExpandDraft] = useState<ExpandDraft | null>(null)
+  const [contextMenu, setContextMenu] = useState<MenuAnchor | null>(null)
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [modelOptions, setModelOptions] = useState<TextModelOption[]>([])
+  const [selectedModelKey, setSelectedModelKey] = useState('')
+  const activeStreamRequestIdRef = useRef<string | null>(null)
+  const editorPaneRef = useRef<HTMLDivElement | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
+  const modelMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: '',
+    editorProps: {
+      attributes: {
+        class:
+          'h-full overflow-auto px-6 py-10 outline-none text-sm leading-7 max-w-3xl mx-auto',
+      },
+    },
+    onUpdate: () => setEditorTick((v) => v + 1),
+    onSelectionUpdate: () => setEditorTick((v) => v + 1),
+  })
+
+  function clearActiveStream() {
+    activeStreamRequestIdRef.current = null
+  }
+
+  const selectedModelLabel = useMemo(() => {
+    const hit = modelOptions.find((opt) => opt.key === selectedModelKey)
+    return hit?.label ?? t('projectLibrary.aiModelEmpty')
+  }, [modelOptions, selectedModelKey, t])
+
+  useEffect(() => {
+    window.aiAPI
+      .getConfig()
+      .then((cfg) => {
+        const config = cfg as AIConfig
+        const options = getTextModelOptions(config)
+        setModelOptions(options)
+        const defaultKey = config.models?.text ?? ''
+        if (defaultKey && options.some((o) => o.key === defaultKey)) {
+          setSelectedModelKey(defaultKey)
+        } else {
+          setSelectedModelKey(options[0]?.key ?? '')
+        }
+      })
+      .catch(() => {
+        setModelOptions([])
+        setSelectedModelKey('')
+      })
+  }, [])
+
+  const draftOverlayStyle = useMemo(() => {
+    if (!expandDraft || !editor || !editorPaneRef.current) return null
+    try {
+      const safePos = Math.max(0, Math.min(expandDraft.insertPos, editor.state.doc.content.size))
+      const coords = editor.view.coordsAtPos(safePos)
+      const rect = editorPaneRef.current.getBoundingClientRect()
+      return { top: Math.max(8, coords.bottom - rect.top + 8) }
+    } catch {
+      return { top: 16 }
+    }
+  }, [expandDraft, editor])
+
+  function handleSelectionFinished() {
+    if (!editor || !editorPaneRef.current) return
+    const { from, to, empty } = editor.state.selection
+    const selectedText = editor.state.doc.textBetween(from, to, '\n').trim()
+    if (empty || !selectedText) {
+      setContextMenu(null)
+      return
+    }
+    setContextMenu({ pos: Math.max(from, to) })
+  }
+
+  const contextMenuStyle = (() => {
+    if (!contextMenu || !editor || !editorPaneRef.current) return null
+    try {
+      const rect = editorPaneRef.current.getBoundingClientRect()
+      const endCoords = editor.view.coordsAtPos(contextMenu.pos)
+      const width = 440
+      const left = Math.max(width / 2 + 12, Math.min(endCoords.right - rect.left, rect.width - width / 2 - 12))
+      const top = Math.max(20, endCoords.top - rect.top - 8)
+      return { left, top }
+    } catch {
+      return null
+    }
+  })()
+
+  useEffect(() => {
+    if (!editorPaneRef.current) return
+    const scrollEl = editorPaneRef.current.querySelector('.ProseMirror')
+    if (!scrollEl) return
+    const onScroll = () => setEditorTick((v) => v + 1)
+    const onResize = () => setEditorTick((v) => v + 1)
+    scrollEl.addEventListener('scroll', onScroll)
+    window.addEventListener('resize', onResize)
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || !contextMenu) return
+    const { from, to, empty } = editor.state.selection
+    if (empty) {
+      setContextMenu(null)
+      return
+    }
+    const nextPos = Math.max(from, to)
+    if (nextPos !== contextMenu.pos) {
+      setContextMenu({ pos: nextPos })
+    }
+  }, [contextMenu, editor, editorTick])
+
+  async function runToolkit(action: SceneAction) {
+    if (!editor) return
+    const { from, to } = editor.state.selection
+    const selectedText = editor.state.doc.textBetween(from, to, '\n')
+
+    if (!selectedText.trim()) {
+      setAiError(t('projectLibrary.aiSelectSceneFirst'))
+      return
+    }
+
+    const context = selectedText.trim()
+    if (!context) {
+      setAiError(t('projectLibrary.aiEditorEmpty'))
+      return
+    }
+
+    setAiBusy(true)
+    setAiError('')
+    setAiReport('')
+    setContextMenu(null)
+    setModelMenuOpen(false)
+    if (action !== 'scene.expand') setExpandDraft(null)
+
+    try {
+      if (action === 'scene.expand') {
+        const start = await window.aiAPI.scriptToolkitStreamStart({ action, context, modelKey: selectedModelKey || undefined })
+        if (!start.ok) {
+          setAiError(start.error)
+          return
+        }
+        activeStreamRequestIdRef.current = start.requestId
+        setExpandDraft({
+          insertPos: to,
+          fullText: '',
+          displayText: '',
+          status: 'streaming',
+        })
+      } else {
+        const result = await window.aiAPI.scriptToolkit({ action, context, modelKey: selectedModelKey || undefined })
+        if (!result.ok) {
+          setAiError(result.error)
+          return
+        }
+
+        if (action === 'scene.pacing' || action === 'scene.continuity-check') {
+          setAiReport(result.text)
+        } else {
+          editor.chain().focus().insertContentAt({ from, to }, result.text).run()
+        }
+      }
+    } catch {
+      setAiError(t('projectLibrary.aiToolkitFailed'))
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  function acceptExpandDraft() {
+    if (!editor || !expandDraft) return
+    editor.chain().focus().insertContentAt(expandDraft.insertPos, `\n\n${expandDraft.displayText}`).run()
+    clearActiveStream()
+    setExpandDraft(null)
+  }
+
+  function discardExpandDraft() {
+    clearActiveStream()
+    setExpandDraft(null)
+  }
+
+  function stopAiToolkit() {
+    clearActiveStream()
+    setAiBusy(false)
+    setExpandDraft((prev) => (prev ? { ...prev, status: 'done' } : null))
+  }
+
+  useEffect(() => {
+    const off = window.aiAPI.onScriptToolkitStreamChunk((payload) => {
+      if (!activeStreamRequestIdRef.current) return
+      if (payload.requestId !== activeStreamRequestIdRef.current) return
+
+      if (payload.error) {
+        setAiError(payload.error)
+        clearActiveStream()
+        setExpandDraft((prev) => (prev ? { ...prev, status: 'done' } : null))
+        return
+      }
+
+      if (payload.done) {
+        clearActiveStream()
+        setExpandDraft((prev) => (prev ? { ...prev, status: 'done' } : null))
+        return
+      }
+
+      if (payload.chunk) {
+        setExpandDraft((prev) => {
+          if (!prev) return null
+          const nextText = prev.displayText + payload.chunk
+          return {
+            ...prev,
+            fullText: nextText,
+            displayText: nextText,
+            status: 'streaming',
+          }
+        })
+      }
+    })
+
+    return () => {
+      off()
+      clearActiveStream()
+    }
+  }, [])
+
+  useEffect(() => {
+    const onGlobalMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (contextMenuRef.current && target && contextMenuRef.current.contains(target)) return
+      if (modelMenuRef.current && target && modelMenuRef.current.contains(target)) return
+      setContextMenu(null)
+      setModelMenuOpen(false)
+    }
+    window.addEventListener('mousedown', onGlobalMouseDown)
+    return () => window.removeEventListener('mousedown', onGlobalMouseDown)
+  }, [])
+
+  return (
+    <div className="rounded-2xl border border-base-300 bg-base-100/95 shadow-sm overflow-hidden max-w-350 mx-auto h-full flex flex-col">
+      <div className="flex flex-wrap items-center justify-center gap-1 border-b border-base-300 p-2.5 bg-base-100">
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('heading', { level: 1 }) ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} aria-label="Heading 1"><Heading1 size={16} /></button>
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('heading', { level: 2 }) ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} aria-label="Heading 2"><Heading2 size={16} /></button>
+        <div className="w-px h-5 bg-base-300 mx-1" />
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('bold') ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold"><Bold size={16} /></button>
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('italic') ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleItalic().run()} aria-label="Italic"><Italic size={16} /></button>
+        <div className="w-px h-5 bg-base-300 mx-1" />
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('bulletList') ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleBulletList().run()} aria-label="Bullet list"><List size={16} /></button>
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('orderedList') ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleOrderedList().run()} aria-label="Ordered list"><ListOrdered size={16} /></button>
+        <button type="button" className={`btn btn-sm btn-ghost ${editor?.isActive('blockquote') ? 'bg-base-200' : ''}`} onClick={() => editor?.chain().focus().toggleBlockquote().run()} aria-label="Quote"><Quote size={16} /></button>
+        <div className="w-px h-5 bg-base-300 mx-1" />
+        <button type="button" className="btn btn-sm btn-ghost" onClick={() => editor?.chain().focus().undo().run()} disabled={!editor?.can().chain().focus().undo().run()} aria-label="Undo"><Undo2 size={16} /></button>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={() => editor?.chain().focus().redo().run()} disabled={!editor?.can().chain().focus().redo().run()} aria-label="Redo"><Redo2 size={16} /></button>
+        <div className="w-px h-5 bg-base-300 mx-1" />
+        <div ref={modelMenuRef} className="relative">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-200/70 hover:bg-base-200 px-3 py-1.5 text-xs max-w-[260px]"
+            onClick={() => setModelMenuOpen((v) => !v)}
+            aria-label={t('projectLibrary.aiModel')}
+          >
+            <span className="truncate max-w-[210px]">{selectedModelLabel}</span>
+            <ChevronDown size={14} className={`${modelMenuOpen ? 'rotate-180' : ''} transition-transform`} />
+          </button>
+
+          {modelMenuOpen ? (
+            <div className="absolute right-0 top-[calc(100%+10px)] w-72 rounded-2xl border border-base-300 bg-base-100 shadow-2xl p-1.5 z-30">
+              {modelOptions.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-base-content/60">{t('projectLibrary.aiModelEmpty')}</div>
+              ) : (
+                modelOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={`w-full text-left rounded-xl px-3 py-2 text-sm hover:bg-base-200 transition-colors ${selectedModelKey === opt.key ? 'bg-base-200 font-medium' : ''}`}
+                    onClick={() => {
+                      setSelectedModelKey(opt.key)
+                      setModelMenuOpen(false)
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {aiError ? <div className="px-3 py-2 text-xs text-error border-b border-base-300">{aiError}</div> : null}
+      {aiReport ? <div className="px-3 py-2 text-xs text-base-content/80 border-b border-base-300 whitespace-pre-wrap">{aiReport}</div> : null}
+
+      <div ref={editorPaneRef} className="relative flex-1 min-h-0" onMouseUp={handleSelectionFinished}>
+        <EditorContent
+          editor={editor}
+          className="flex-1 min-h-0 h-full [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h1]:font-semibold [&_.ProseMirror_h1]:mb-3 [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-semibold [&_.ProseMirror_h2]:mb-2 [&_.ProseMirror_p]:mb-2 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_blockquote]:border-l-2 [&_.ProseMirror_blockquote]:border-base-300 [&_.ProseMirror_blockquote]:pl-3"
+        />
+
+        {expandDraft && draftOverlayStyle ? (
+          <div className="absolute left-4 right-4 rounded-xl border border-primary/30 bg-base-100/95 shadow-lg backdrop-blur p-3" style={{ top: `${draftOverlayStyle.top}px` }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-primary">{t('projectLibrary.aiDraftTitle')}</p>
+              <div className="flex gap-1">
+                <button type="button" className="btn btn-xs btn-ghost" onClick={discardExpandDraft}><X size={12} />{t('projectLibrary.aiDiscard')}</button>
+                <button type="button" className="btn btn-xs btn-primary" onClick={acceptExpandDraft} disabled={expandDraft.status === 'streaming'}><Check size={12} />{t('projectLibrary.aiAccept')}</button>
+              </div>
+            </div>
+            <div className="text-sm text-base-content/80 whitespace-pre-wrap max-h-44 overflow-auto">
+              {expandDraft.displayText || t('projectLibrary.aiStreaming')}
+            </div>
+          </div>
+        ) : null}
+
+        {contextMenu && contextMenuStyle ? (
+          <div
+            ref={contextMenuRef}
+            className="absolute z-20 -translate-x-1/2 -translate-y-full"
+            style={{ left: `${contextMenuStyle.left}px`, top: `${contextMenuStyle.top}px` }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className="rounded-2xl border border-base-300/90 bg-base-100/96 shadow-2xl backdrop-blur px-2 py-1.5">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-circle"
+                title={t('projectLibrary.aiSceneExpand')}
+                aria-label={t('projectLibrary.aiSceneExpand')}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void runToolkit('scene.expand')}
+                disabled={aiBusy}
+              >
+                <Wand2 size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-circle"
+                title={t('projectLibrary.aiSceneRewrite')}
+                aria-label={t('projectLibrary.aiSceneRewrite')}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void runToolkit('scene.rewrite')}
+                disabled={aiBusy}
+              >
+                <RefreshCcw size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-circle"
+                title={t('projectLibrary.aiSceneDialoguePolish')}
+                aria-label={t('projectLibrary.aiSceneDialoguePolish')}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void runToolkit('scene.dialogue-polish')}
+                disabled={aiBusy}
+              >
+                <MessageSquare size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-circle"
+                title={t('projectLibrary.aiScenePacing')}
+                aria-label={t('projectLibrary.aiScenePacing')}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void runToolkit('scene.pacing')}
+                disabled={aiBusy}
+              >
+                <Activity size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-circle"
+                title={t('projectLibrary.aiSceneContinuityCheck')}
+                aria-label={t('projectLibrary.aiSceneContinuityCheck')}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void runToolkit('scene.continuity-check')}
+                disabled={aiBusy}
+              >
+                <ShieldCheck size={15} />
+              </button>
+            </div>
+            </div>
+          </div>
+        ) : null}
+
+        {(aiBusy || (expandDraft && expandDraft.status === 'streaming')) ? (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[min(860px,calc(100%-2rem))] rounded-xl border border-base-300 bg-base-100/95 shadow-xl backdrop-blur px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-primary/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-primary/40" />
+                <span className="w-2.5 h-2.5 rounded-full bg-base-300" />
+              </div>
+              <span className="font-medium text-primary">{t('projectLibrary.aiToolkitRunning')}</span>
+            </div>
+
+            <button type="button" className="btn btn-ghost btn-xs" onClick={stopAiToolkit}>
+              <Square size={12} />
+              {t('projectLibrary.aiStop')}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}

@@ -92,6 +92,45 @@ contextBridge.exposeInMainWorld('aiAPI', {
     },
   ): Promise<{ ok: true; reply: string; draft: { name: string; code: string; description: string; prompt: string } } | { ok: false; error: string }> =>
     ipcRenderer.invoke('ai:styleAgentChat', params),
+  scriptToolkit: (
+    params: {
+      action:
+        | 'scene.expand'
+        | 'scene.rewrite'
+        | 'scene.dialogue-polish'
+        | 'scene.pacing'
+        | 'scene.continuity-check'
+      context: string
+      instruction?: string
+      modelKey?: string
+    },
+  ): Promise<{ ok: true; text: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('ai:scriptToolkit', params),
+  scriptToolkitStreamStart: (
+    params: {
+      action:
+        | 'scene.expand'
+        | 'scene.rewrite'
+        | 'scene.dialogue-polish'
+        | 'scene.pacing'
+        | 'scene.continuity-check'
+      context: string
+      instruction?: string
+      modelKey?: string
+    },
+  ): Promise<{ ok: true; requestId: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('ai:scriptToolkitStreamStart', params),
+  onScriptToolkitStreamChunk: (
+    callback: (payload: { requestId: string; chunk?: string; done: boolean; error?: string }) => void,
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: string; chunk?: string; done: boolean; error?: string }) => {
+      callback(payload)
+    }
+    ipcRenderer.on('ai:scriptToolkitStreamChunk', listener)
+    return () => {
+      ipcRenderer.removeListener('ai:scriptToolkitStreamChunk', listener)
+    }
+  },
 })
 
 contextBridge.exposeInMainWorld('vectorsAPI', {

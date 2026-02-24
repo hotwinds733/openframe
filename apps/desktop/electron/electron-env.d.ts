@@ -60,6 +60,31 @@ interface Window {
       draft: { name: string; code: string; description: string; prompt: string }
       modelKey?: string
     }) => Promise<{ ok: true; reply: string; draft: { name: string; code: string; description: string; prompt: string } } | { ok: false; error: string }>
+    scriptToolkit: (params: {
+      action:
+        | 'scene.expand'
+        | 'scene.rewrite'
+        | 'scene.dialogue-polish'
+        | 'scene.pacing'
+        | 'scene.continuity-check'
+      context: string
+      instruction?: string
+      modelKey?: string
+    }) => Promise<{ ok: true; text: string } | { ok: false; error: string }>
+    scriptToolkitStreamStart: (params: {
+      action:
+        | 'scene.expand'
+        | 'scene.rewrite'
+        | 'scene.dialogue-polish'
+        | 'scene.pacing'
+        | 'scene.continuity-check'
+      context: string
+      instruction?: string
+      modelKey?: string
+    }) => Promise<{ ok: true; requestId: string } | { ok: false; error: string }>
+    onScriptToolkitStreamChunk: (
+      callback: (payload: { requestId: string; chunk?: string; done: boolean; error?: string }) => void,
+    ) => () => void
   }
   settingsAPI: {
     getAll: () => Promise<Array<{ key: string; value: string }>>
