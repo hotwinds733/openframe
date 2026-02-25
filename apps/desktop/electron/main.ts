@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, protocol, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, protocol, screen } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import { closeDb } from './db'
 import { registerSettingsHandlers } from './handlers/settings'
@@ -23,6 +24,24 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST
 
 let win: BrowserWindow | null
+const APP_DISPLAY_NAME = 'Openframe'
+
+function resolveAppIconPath(): string | null {
+  const candidates = [
+    path.join(process.env.APP_ROOT, 'public', 'logo.png'),
+    path.join(process.env.APP_ROOT, 'public', 'logo.ico'),
+    path.join(process.env.APP_ROOT, 'public', 'logo.icns'),
+    path.join(process.env.APP_ROOT, 'public', 'logo.svg'),
+    path.join(process.env.APP_ROOT, 'build', 'logo.png'),
+    path.join(process.env.APP_ROOT, 'build', 'logo.icns'),
+  ]
+
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) return candidate
+  }
+
+  return null
+}
 
 function contentTypeFromPath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
@@ -40,8 +59,10 @@ function contentTypeFromPath(filePath: string): string {
 }
 
 function createWindow() {
+  const iconPath = resolveAppIconPath()
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: iconPath ?? undefined,
+    title: 'Openframe',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -64,9 +85,11 @@ function createWindow() {
 function createStudioWindow(projectId: string, seriesId: string) {
   const display = screen.getPrimaryDisplay()
   const { x, y, width, height } = display.workArea
+  const iconPath = resolveAppIconPath()
 
   const studioWin = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: iconPath ?? undefined,
+    title: 'Openframe',
     titleBarStyle: 'hiddenInset',
     x,
     y,
@@ -102,6 +125,30 @@ app.on('activate', () => {
 app.on('before-quit', closeDb)
 
 app.whenReady().then(() => {
+  app.setName(APP_DISPLAY_NAME)
+
+  const aboutOptions: Parameters<typeof app.setAboutPanelOptions>[0] = {
+    applicationName: APP_DISPLAY_NAME,
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+  }
+
+  const aboutIconPath = resolveAppIconPath()
+  if (aboutIconPath) {
+    aboutOptions.iconPath = aboutIconPath
+  }
+  app.setAboutPanelOptions(aboutOptions)
+
+  if (process.platform === 'darwin') {
+    const dockIconPath = resolveAppIconPath()
+    if (dockIconPath) {
+      const dockIcon = nativeImage.createFromPath(dockIconPath)
+      if (!dockIcon.isEmpty()) {
+        app.dock.setIcon(dockIcon)
+      }
+    }
+  }
+
   protocol.handle('openframe-thumb', async (request) => {
     try {
       const url = new URL(request.url)

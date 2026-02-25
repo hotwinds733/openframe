@@ -7,7 +7,7 @@ export default {
   },
   common: {
     user: 'User',
-    appName: 'OpenFrame',
+    appName: 'Openframe',
   },
   content: {
     overviewTitle: 'Overview',

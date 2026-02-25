@@ -7,7 +7,7 @@ export default {
   },
   common: {
     user: '用户',
-    appName: 'OpenFrame',
+    appName: 'Openframe',
   },
   content: {
     overviewTitle: '概览',
