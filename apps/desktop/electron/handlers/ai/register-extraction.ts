@@ -185,7 +185,15 @@ export function registerAIExtractionHandlers() {
       _event,
       params: {
         script: string
-        scenes: Array<{ id: string; title: string }>
+        scenes: Array<{
+          id: string
+          title: string
+          location?: string
+          time?: string
+          mood?: string
+          description?: string
+          shot_notes?: string
+        }>
         characters: Array<{ id: string; name: string }>
         modelKey?: string
       },
@@ -197,10 +205,22 @@ export function registerAIExtractionHandlers() {
       const prompt = [
         'You are a screenplay storyboard planner.',
         'Generate a practical shot list from the script.',
+        'Maximize shot count as much as reasonably possible while staying faithful to the script.',
+        'Prefer finer granularity: split each scene into many short, meaningful beats instead of merging beats into long shots.',
+        'If uncertain between fewer vs more shots, choose more shots.',
+        'Cover the script from start to end with exhaustive beat coverage; avoid skipping transitions or intermediate actions.',
+        'Shots must form a coherent sequence with smooth transitions between adjacent shots.',
+        'Preserve visual continuity across neighboring shots: screen direction, eyeline, character positions, and action progression.',
+        'Use scene switches only when motivated by the script narrative progression.',
+        'Avoid disconnected or repetitive shots that do not advance the beat from the previous shot.',
+        'Continuity detail must be very strong: adjacent shots should read like consecutive moments in the same ongoing action unless the script explicitly jumps.',
+        'Keep action text specific and stateful, inheriting important props/poses/positions from prior shots when applicable.',
         'Each shot must include scene_ref and character_refs, using ONLY provided IDs.',
         'Do not invent new scene_ref or character_refs values.',
         'Return STRICT JSON only with shape:',
         '{"shots":[{"title":"","scene_ref":"","character_refs":[],"shot_size":"","camera_angle":"","camera_move":"","duration_sec":3,"action":"","dialogue":""}]}',
+        'Keep each shot concise and production-usable.',
+        'duration_sec should usually be between 1 and 5 unless the script clearly requires otherwise.',
         'Do not include markdown code fences.',
         `Scenes:\n${JSON.stringify(params.scenes)}`,
         `Characters:\n${JSON.stringify(params.characters)}`,

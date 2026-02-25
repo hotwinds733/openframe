@@ -91,6 +91,8 @@ export function StudioWorkspace({
   const [productionVideoBusyShotId, setProductionVideoBusyShotId] = useState<string | null>(null)
   const [productionAutoEditBusy, setProductionAutoEditBusy] = useState(false)
   const [productionAutoEditVideo, setProductionAutoEditVideo] = useState<string | null>(null)
+  const [exportingTimeline, setExportingTimeline] = useState(false)
+  const [exportingEdl, setExportingEdl] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -952,6 +954,70 @@ export function StudioWorkspace({
       .map((shot, index) => ({ ...shot, shot_index: index + 1 }))
   }
 
+  function formatShotContextLine(
+    shot: ShotCard | undefined,
+    sceneMap: Map<string, Scene>,
+    characterMap: Map<string, Character>,
+  ): string {
+    if (!shot) return 'none'
+    const shotScene = sceneMap.get(shot.scene_id)
+    const shotCharacters = shot.character_ids
+      .map((id) => characterMap.get(id)?.name)
+      .filter(Boolean)
+      .join(', ') || 'none'
+    return [
+      `#${shot.shot_index} ${shot.title || 'untitled shot'}`,
+      `Scene=${shotScene?.title || 'unknown'}`,
+      `Size=${shot.shot_size || 'unknown'}`,
+      `Angle=${shot.camera_angle || 'unknown'}`,
+      `Move=${shot.camera_move || 'unknown'}`,
+      `Action=${shot.action || 'unknown'}`,
+      `Characters=${shotCharacters}`,
+    ].join(' | ')
+  }
+
+  function buildShotImagePrompt(params: {
+    shot: ShotCard
+    scene: Scene | undefined
+    characterNames: string
+    previousShot: ShotCard | undefined
+    nextShot: ShotCard | undefined
+    sceneMap: Map<string, Scene>
+    characterMap: Map<string, Character>
+  }): string {
+    const {
+      shot,
+      scene,
+      characterNames,
+      previousShot,
+      nextShot,
+      sceneMap,
+      characterMap,
+    } = params
+
+    return [
+      'Cinematic storyboard shot keyframe, production-ready, high detail, no watermark text.',
+      'Reference consistency is mandatory: preserve identity, costume, silhouette, and environment composition from reference images.',
+      'If references conflict, prioritize character identity consistency first, then scene continuity.',
+      'Shot continuity is mandatory: keep screen direction, eyeline, and spatial geography coherent with neighboring shots.',
+      'Bridge naturally from previous shot into current shot, and leave visual room for next shot transition.',
+      `Project category: ${projectCategory || 'unknown'}`,
+      `Project style: ${projectGenre || 'unknown'}`,
+      `Shot title: ${shot.title || 'untitled shot'}`,
+      `Shot size: ${shot.shot_size || 'unknown'}`,
+      `Camera angle: ${shot.camera_angle || 'unknown'}`,
+      `Camera movement: ${shot.camera_move || 'unknown'}`,
+      `Action: ${shot.action || 'unknown'}`,
+      `Scene: ${scene?.title || 'unknown'}`,
+      `Location: ${scene?.location || 'unknown'}`,
+      `Time: ${scene?.time || 'unknown'}`,
+      `Mood: ${scene?.mood || 'unknown'}`,
+      characterNames ? `Characters in shot: ${characterNames}` : 'Characters in shot: none',
+      `Previous shot context: ${formatShotContextLine(previousShot, sceneMap, characterMap)}`,
+      `Next shot context: ${formatShotContextLine(nextShot, sceneMap, characterMap)}`,
+    ].join('\n')
+  }
+
   async function addShot(draft: ShotDraft) {
     if (!seriesId) return
     setShotError('')
@@ -1078,8 +1144,15 @@ export function StudioWorkspace({
 
     const sceneMap = new Map(seriesScenes.map((scene) => [scene.id, scene]))
     const characterMap = new Map(projectCharacters.map((character) => [character.id, character]))
+    const shotsToGenerate = [...seriesShots].sort((a, b) => a.shot_index - b.shot_index || a.created_at - b.created_at)
+    const shotOrder = new Map(shotsToGenerate.map((shot, index) => [shot.id, index]))
 
     async function generateShotImage(shot: ShotCard) {
+      const shotOrderIndex = shotOrder.get(shot.id) ?? -1
+      const previousShot = shotOrderIndex > 0 ? shotsToGenerate[shotOrderIndex - 1] : undefined
+      const nextShot = shotOrderIndex >= 0 && shotOrderIndex + 1 < shotsToGenerate.length
+        ? shotsToGenerate[shotOrderIndex + 1]
+        : undefined
       const scene = sceneMap.get(shot.scene_id)
       const characterNames = shot.character_ids
         .map((id) => characterMap.get(id)?.name)
@@ -1094,23 +1167,15 @@ export function StudioWorkspace({
         if (cref) referenceImages.push(cref)
       }
 
-      const prompt = [
-        'Cinematic storyboard shot keyframe, production-ready, high detail, no watermark text.',
-        'Reference consistency is mandatory: preserve identity, costume, silhouette, and environment composition from reference images.',
-        'If references conflict, prioritize character identity consistency first, then scene continuity.',
-        `Project category: ${projectCategory || 'unknown'}`,
-        `Project style: ${projectGenre || 'unknown'}`,
-        `Shot title: ${shot.title || 'untitled shot'}`,
-        `Shot size: ${shot.shot_size || 'unknown'}`,
-        `Camera angle: ${shot.camera_angle || 'unknown'}`,
-        `Camera movement: ${shot.camera_move || 'unknown'}`,
-        `Action: ${shot.action || 'unknown'}`,
-        `Scene: ${scene?.title || 'unknown'}`,
-        `Location: ${scene?.location || 'unknown'}`,
-        `Time: ${scene?.time || 'unknown'}`,
-        `Mood: ${scene?.mood || 'unknown'}`,
-        characterNames ? `Characters in shot: ${characterNames}` : 'Characters in shot: none',
-      ].join('\n')
+      const prompt = buildShotImagePrompt({
+        shot,
+        scene,
+        characterNames,
+        previousShot,
+        nextShot,
+        sceneMap,
+        characterMap,
+      })
 
       const result = await window.aiAPI.generateImage({
         prompt: referenceImages.length > 0 ? { text: prompt, images: referenceImages } : prompt,
@@ -1144,7 +1209,6 @@ export function StudioWorkspace({
       )
     }
 
-    const shotsToGenerate = [...seriesShots]
     let remaining = shotsToGenerate.length
 
     for (const shot of shotsToGenerate) {
@@ -1169,6 +1233,12 @@ export function StudioWorkspace({
     setGeneratingShotId(id)
     setShotError('')
     try {
+      const sortedShots = [...seriesShots].sort((a, b) => a.shot_index - b.shot_index || a.created_at - b.created_at)
+      const shotOrderIndex = sortedShots.findIndex((item) => item.id === shot.id)
+      const previousShot = shotOrderIndex > 0 ? sortedShots[shotOrderIndex - 1] : undefined
+      const nextShot = shotOrderIndex >= 0 && shotOrderIndex + 1 < sortedShots.length
+        ? sortedShots[shotOrderIndex + 1]
+        : undefined
       const sceneMap = new Map(seriesScenes.map((scene) => [scene.id, scene]))
       const characterMap = new Map(projectCharacters.map((character) => [character.id, character]))
       const scene = sceneMap.get(shot.scene_id)
@@ -1185,23 +1255,15 @@ export function StudioWorkspace({
         if (cref) referenceImages.push(cref)
       }
 
-      const prompt = [
-        'Cinematic storyboard shot keyframe, production-ready, high detail, no watermark text.',
-        'Reference consistency is mandatory: preserve identity, costume, silhouette, and environment composition from reference images.',
-        'If references conflict, prioritize character identity consistency first, then scene continuity.',
-        `Project category: ${projectCategory || 'unknown'}`,
-        `Project style: ${projectGenre || 'unknown'}`,
-        `Shot title: ${shot.title || 'untitled shot'}`,
-        `Shot size: ${shot.shot_size || 'unknown'}`,
-        `Camera angle: ${shot.camera_angle || 'unknown'}`,
-        `Camera movement: ${shot.camera_move || 'unknown'}`,
-        `Action: ${shot.action || 'unknown'}`,
-        `Scene: ${scene?.title || 'unknown'}`,
-        `Location: ${scene?.location || 'unknown'}`,
-        `Time: ${scene?.time || 'unknown'}`,
-        `Mood: ${scene?.mood || 'unknown'}`,
-        characterNames ? `Characters in shot: ${characterNames}` : 'Characters in shot: none',
-      ].join('\n')
+      const prompt = buildShotImagePrompt({
+        shot,
+        scene,
+        characterNames,
+        previousShot,
+        nextShot,
+        sceneMap,
+        characterMap,
+      })
 
       const result = await window.aiAPI.generateImage({
         prompt: referenceImages.length > 0 ? { text: prompt, images: referenceImages } : prompt,
@@ -1238,24 +1300,58 @@ export function StudioWorkspace({
     const shot = seriesShots.find((item) => item.id === shotId)
     if (!shot) return
 
+    const latestShots = await window.shotsAPI.getBySeries(seriesId)
+    const orderedShots = latestShots
+      .slice()
+      .sort((a, b) => a.shot_index - b.shot_index || a.created_at - b.created_at)
+    const shotOrderIndex = orderedShots.findIndex((item) => item.id === shotId)
+    const activeShot = shotOrderIndex >= 0 ? orderedShots[shotOrderIndex] : null
+    if (!activeShot) return
+    const previousShot = shotOrderIndex > 0 ? orderedShots[shotOrderIndex - 1] : undefined
+    const nextShot = shotOrderIndex >= 0 && shotOrderIndex + 1 < orderedShots.length
+      ? orderedShots[shotOrderIndex + 1]
+      : undefined
+
     const busyKey = `${shotId}:${kind}`
     setProductionFrameBusyKey(busyKey)
     setShotError('')
     try {
+      if (kind === 'first' && previousShot?.production_last_frame) {
+        const linkedFirstFrame = previousShot.production_last_frame
+        const updatedShot: ShotCard = {
+          ...activeShot,
+          production_first_frame: linkedFirstFrame,
+          production_last_frame: activeShot.production_last_frame ?? null,
+        }
+        await window.shotsAPI.update(updatedShot)
+        setSeriesShots((prev) => prev.map((item) => (item.id === shotId
+          ? { ...item, production_first_frame: linkedFirstFrame }
+          : item)))
+        setProductionFrames((prev) => ({
+          ...prev,
+          [shotId]: {
+            first: linkedFirstFrame,
+            last: prev[shotId]?.last ?? activeShot.production_last_frame ?? null,
+            video: prev[shotId]?.video ?? activeShot.production_video ?? null,
+          },
+        }))
+        return
+      }
+
       const sceneMap = new Map(seriesScenes.map((scene) => [scene.id, scene]))
       const characterMap = new Map(projectCharacters.map((character) => [character.id, character]))
-      const scene = sceneMap.get(shot.scene_id)
-      const characterNames = shot.character_ids
+      const scene = sceneMap.get(activeShot.scene_id)
+      const characterNames = activeShot.character_ids
         .map((cid) => characterMap.get(cid)?.name)
         .filter(Boolean)
         .join(', ')
 
       const referenceImages: string[] = []
-      const middleRef = await readThumbnailAsBase64(shot.thumbnail)
+      const middleRef = await readThumbnailAsBase64(activeShot.thumbnail)
       if (middleRef) referenceImages.push(middleRef)
       const sceneRef = await readThumbnailAsBase64(scene?.thumbnail ?? null)
       if (sceneRef) referenceImages.push(sceneRef)
-      for (const cid of shot.character_ids.slice(0, 3)) {
+      for (const cid of activeShot.character_ids.slice(0, 3)) {
         const cref = await readThumbnailAsBase64(characterMap.get(cid)?.thumbnail ?? null)
         if (cref) referenceImages.push(cref)
       }
@@ -1271,11 +1367,11 @@ export function StudioWorkspace({
         'Keep identity, costume, location, composition logic, and lighting continuity.',
         `Project category: ${projectCategory || 'unknown'}`,
         `Project style: ${projectGenre || 'unknown'}`,
-        `Shot title: ${shot.title || 'untitled shot'}`,
-        `Shot size: ${shot.shot_size || 'unknown'}`,
-        `Camera angle: ${shot.camera_angle || 'unknown'}`,
-        `Camera movement: ${shot.camera_move || 'unknown'}`,
-        `Action: ${shot.action || 'unknown'}`,
+        `Shot title: ${activeShot.title || 'untitled shot'}`,
+        `Shot size: ${activeShot.shot_size || 'unknown'}`,
+        `Camera angle: ${activeShot.camera_angle || 'unknown'}`,
+        `Camera movement: ${activeShot.camera_move || 'unknown'}`,
+        `Action: ${activeShot.action || 'unknown'}`,
         `Scene: ${scene?.title || 'unknown'}`,
         `Location: ${scene?.location || 'unknown'}`,
         `Time: ${scene?.time || 'unknown'}`,
@@ -1298,16 +1394,22 @@ export function StudioWorkspace({
       const savedPath = await window.thumbnailsAPI.save(bytes, ext)
 
       const updatedShot: ShotCard = {
-        ...shot,
+        ...activeShot,
         production_first_frame: kind === 'first'
           ? savedPath
-          : shot.production_first_frame ?? null,
+          : activeShot.production_first_frame ?? null,
         production_last_frame: kind === 'last'
           ? savedPath
-          : shot.production_last_frame ?? null,
+          : activeShot.production_last_frame ?? null,
       }
       await window.shotsAPI.update(updatedShot)
-      setSeriesShots((prev) => prev.map((item) => (item.id === shotId ? updatedShot : item)))
+      setSeriesShots((prev) => prev.map((item) => (item.id === shotId
+        ? {
+            ...item,
+            production_first_frame: kind === 'first' ? savedPath : item.production_first_frame,
+            production_last_frame: kind === 'last' ? savedPath : item.production_last_frame,
+          }
+        : item)))
 
       setProductionFrames((prev) => ({
         ...prev,
@@ -1317,6 +1419,26 @@ export function StudioWorkspace({
           video: prev[shotId]?.video ?? null,
         },
       }))
+
+      if (kind === 'last' && nextShot) {
+        const linkedNextShot: ShotCard = {
+          ...nextShot,
+          production_first_frame: savedPath,
+          production_last_frame: nextShot.production_last_frame ?? null,
+        }
+        await window.shotsAPI.update(linkedNextShot)
+        setSeriesShots((prev) => prev.map((item) => (item.id === nextShot.id
+          ? { ...item, production_first_frame: savedPath }
+          : item)))
+        setProductionFrames((prev) => ({
+          ...prev,
+          [nextShot.id]: {
+            first: savedPath,
+            last: prev[nextShot.id]?.last ?? nextShot.production_last_frame ?? null,
+            video: prev[nextShot.id]?.video ?? nextShot.production_video ?? null,
+          },
+        }))
+      }
     } catch {
       setShotError(t('projectLibrary.aiToolkitFailed'))
     } finally {
@@ -1333,6 +1455,47 @@ export function StudioWorkspace({
     enqueueTask(taskTitle, async () => {
       await generateProductionFrame(shotId, kind)
     }, 'media')
+  }
+
+  function queueGenerateAllFirstLastFrames() {
+    if (!seriesShots.length) {
+      setShotError(t('projectLibrary.shotEmpty'))
+      return
+    }
+    const orderedShotIds = [...seriesShots]
+      .sort((a, b) => a.shot_index - b.shot_index || a.created_at - b.created_at)
+      .map((shot) => shot.id)
+    const total = orderedShotIds.length
+    const taskTitle = t('projectLibrary.productionGenerateFirstLastFrames')
+    const taskId = crypto.randomUUID()
+
+    setTaskQueue((prev) => [
+      ...prev,
+      {
+        id: taskId,
+        title: taskTitle,
+        status: 'queued',
+        message: t('projectLibrary.taskQueued'),
+        created_at: Date.now(),
+      },
+    ])
+
+    void mediaQueueRef.current.add(async () => {
+      updateTask(taskId, { status: 'running', message: `${t('projectLibrary.taskRunning')} 0/${total}` })
+      try {
+        let completed = 0
+        for (const shotId of orderedShotIds) {
+          await generateProductionFrame(shotId, 'first')
+          await generateProductionFrame(shotId, 'last')
+          completed += 1
+          updateTask(taskId, { message: `${t('projectLibrary.taskRunning')} ${completed}/${total}` })
+        }
+        updateTask(taskId, { status: 'success', message: `${t('projectLibrary.taskSuccess')} ${total}/${total}` })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : t('projectLibrary.taskFailed')
+        updateTask(taskId, { status: 'error', message: msg })
+      }
+    })
   }
 
   async function generateProductionVideo(shotId: string, params: { durationSec: number; ratio: string; mode: 'single' | 'first_last' }) {
@@ -1432,6 +1595,88 @@ export function StudioWorkspace({
     const taskTitle = `${t('projectLibrary.productionGenerateVideo')} · #${shot?.shot_index ?? '-'} ${shot?.title || t('projectLibrary.shotCardUntitled')}`
     enqueueTask(taskTitle, async () => {
       await generateProductionVideo(shotId, params)
+    }, 'media')
+  }
+
+  function queueExportFcpxml() {
+    if (exportingTimeline) return
+
+    const clips = seriesShots
+      .slice()
+      .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
+      .filter((shot) => Boolean(shot.production_video))
+      .map((shot) => ({
+        shotId: shot.id,
+        title: shot.title,
+        path: shot.production_video!,
+        trimStartSec: 0,
+        trimEndSec: Math.max(0.1, shot.duration_sec || 3),
+      }))
+
+    if (clips.length === 0) {
+      setShotError(t('projectLibrary.productionNeedVideos'))
+      return
+    }
+
+    setShotError('')
+    setExportingTimeline(true)
+
+    enqueueTask(t('projectLibrary.productionExportFcpxml'), async () => {
+      try {
+        await window.mediaAPI.exportFcpxml({
+          ratio: projectRatio,
+          orderedShotIds: clips.map((clip) => clip.shotId),
+          clips,
+          projectName: `${projectName} - ${seriesTitle}`,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('projectLibrary.taskFailed')
+        setShotError(message)
+        throw error
+      } finally {
+        setExportingTimeline(false)
+      }
+    }, 'media')
+  }
+
+  function queueExportEdl() {
+    if (exportingEdl) return
+
+    const clips = seriesShots
+      .slice()
+      .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
+      .filter((shot) => Boolean(shot.production_video))
+      .map((shot) => ({
+        shotId: shot.id,
+        title: shot.title,
+        path: shot.production_video!,
+        trimStartSec: 0,
+        trimEndSec: Math.max(0.1, shot.duration_sec || 3),
+      }))
+
+    if (clips.length === 0) {
+      setShotError(t('projectLibrary.productionNeedVideos'))
+      return
+    }
+
+    setShotError('')
+    setExportingEdl(true)
+
+    enqueueTask(t('projectLibrary.productionExportEdl'), async () => {
+      try {
+        await window.mediaAPI.exportEdl({
+          orderedShotIds: clips.map((clip) => clip.shotId),
+          clips,
+          projectName: `${projectName} - ${seriesTitle}`,
+          fps: 30,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('projectLibrary.taskFailed')
+        setShotError(message)
+        throw error
+      } finally {
+        setExportingEdl(false)
+      }
     }, 'media')
   }
 
@@ -1695,7 +1940,12 @@ export function StudioWorkspace({
             framesByShot={productionFrames}
             frameBusyKey={productionFrameBusyKey}
             videoBusyShotId={productionVideoBusyShotId}
+            exportingTimeline={exportingTimeline}
+            exportingEdl={exportingEdl}
             onGenerateFrame={(shotId, kind) => queueGenerateProductionFrame(shotId, kind)}
+            onGenerateAllFirstLastFrames={queueGenerateAllFirstLastFrames}
+            onExportFcpxml={queueExportFcpxml}
+            onExportEdl={queueExportEdl}
             onGenerateVideo={(shotId, params) => queueGenerateProductionVideo(shotId, params)}
           />
         ) : showProductionWorkspacePanel ? (

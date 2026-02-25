@@ -133,7 +133,15 @@ interface Window {
     }) => Promise<{ ok: true; scene: { title: string; location: string; time: string; mood: string; description: string; shot_notes: string } } | { ok: false; error: string }>
     extractShotsFromScript: (params: {
       script: string
-      scenes: Array<{ id: string; title: string }>
+      scenes: Array<{
+        id: string
+        title: string
+        location?: string
+        time?: string
+        mood?: string
+        description?: string
+        shot_notes?: string
+      }>
       characters: Array<{ id: string; name: string }>
       modelKey?: string
     }) => Promise<{ ok: true; shots: Array<{ title: string; scene_ref: string; character_refs: string[]; shot_size: string; camera_angle: string; camera_move: string; duration_sec: number; action: string; dialogue: string }> } | { ok: false; error: string }>
@@ -225,7 +233,19 @@ interface Window {
     autoEdit: (payload: {
       ratio: '16:9' | '9:16'
       orderedShotIds: string[]
-      clips: Array<{ shotId: string; path: string; trimStartSec?: number; trimEndSec?: number }>
+      clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
+    }) => Promise<{ outputPath: string }>
+    exportFcpxml: (payload: {
+      ratio: '16:9' | '9:16'
+      orderedShotIds: string[]
+      clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
+      projectName?: string
+    }) => Promise<{ outputPath: string }>
+    exportEdl: (payload: {
+      orderedShotIds: string[]
+      clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
+      projectName?: string
+      fps?: number
     }) => Promise<{ outputPath: string }>
   }
   categoriesAPI: {

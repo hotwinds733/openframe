@@ -19,7 +19,12 @@ interface VideoPanelProps {
   framesByShot: Record<string, FramePair>
   frameBusyKey: string | null
   videoBusyShotId: string | null
+  exportingTimeline: boolean
+  exportingEdl: boolean
   onGenerateFrame: (shotId: string, kind: 'first' | 'last') => void
+  onGenerateAllFirstLastFrames: () => void
+  onExportFcpxml: () => void
+  onExportEdl: () => void
   onGenerateVideo: (shotId: string, params: { durationSec: number; ratio: string; mode: VideoFrameMode }) => void
 }
 
@@ -40,13 +45,18 @@ export function VideoPanel({
   framesByShot,
   frameBusyKey,
   videoBusyShotId,
+  exportingTimeline,
+  exportingEdl,
   onGenerateFrame,
+  onGenerateAllFirstLastFrames,
+  onExportFcpxml,
+  onExportEdl,
   onGenerateVideo,
 }: VideoPanelProps) {
   const { t } = useTranslation()
   const [selectedShotId, setSelectedShotId] = useState<string>('')
   const [durationSec, setDurationSec] = useState(4)
-  const [frameMode, setFrameMode] = useState<VideoFrameMode>('single')
+  const [frameMode, setFrameMode] = useState<VideoFrameMode>('first_last')
 
   useEffect(() => {
     if (!shots.length) {
@@ -233,6 +243,38 @@ export function VideoPanel({
             {[3, 4, 5, 6, 8].map((sec) => <option key={sec} value={sec}>{sec}s</option>)}
           </select>
         </label>
+
+        <div className="mt-2 border-t border-base-300 pt-3">
+          <div className="join join-vertical w-full gap-2 flex flex-col">
+            <button
+              type="button"
+              className="btn btn-sm btn-primary join-item w-full"
+              disabled={frameMode !== 'first_last' || !shots.length || Boolean(frameBusyKey)}
+              onClick={onGenerateAllFirstLastFrames}
+            >
+              <Sparkles size={14} />
+              {t('projectLibrary.productionGenerateFirstLastFrames')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline join-item w-full"
+              disabled={!shots.some((shot) => Boolean(shot.production_video)) || exportingTimeline}
+              onClick={onExportFcpxml}
+            >
+              <Film size={14} />
+              {exportingTimeline ? t('projectLibrary.aiStreaming') : t('projectLibrary.productionExportFcpxml')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline join-item w-full"
+              disabled={!shots.some((shot) => Boolean(shot.production_video)) || exportingEdl}
+              onClick={onExportEdl}
+            >
+              <Film size={14} />
+              {exportingEdl ? t('projectLibrary.aiStreaming') : t('projectLibrary.productionExportEdl')}
+            </button>
+          </div>
+        </div>
       </article>
     </section>
   )

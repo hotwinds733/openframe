@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { ipcMain } from 'electron'
+import { pathToFileURL } from 'node:url'
+import { ipcMain, shell } from 'electron'
 import { getDataDir } from '../data_dir'
 
 type AutoEditClip = {
   shotId: string
   path: string
+  title?: string
   trimStartSec?: number
   trimEndSec?: number
 }
@@ -18,6 +20,28 @@ type AutoEditPayload = {
 }
 
 type AutoEditResult = {
+  outputPath: string
+}
+
+type ExportFcpxmlPayload = {
+  ratio: '16:9' | '9:16'
+  orderedShotIds: string[]
+  clips: AutoEditClip[]
+  projectName?: string
+}
+
+type ExportFcpxmlResult = {
+  outputPath: string
+}
+
+type ExportEdlPayload = {
+  orderedShotIds: string[]
+  clips: AutoEditClip[]
+  projectName?: string
+  fps?: number
+}
+
+type ExportEdlResult = {
   outputPath: string
 }
 
@@ -58,6 +82,202 @@ function runFfmpeg(args: string[]): Promise<void> {
   })
 }
 
+function escapeXml(value: string): string {
+  return value
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;')
+    .split("'").join('&apos;')
+}
+
+function secToFcpxTime(seconds: number, fps = 30): string {
+  const frames = Math.max(1, Math.round(seconds * fps))
+  return `${String(frames)}/${String(fps)}s`
+}
+
+function formatResourceByRatio(ratio: '16:9' | '9:16'): { width: number; height: number; formatName: string } {
+  if (ratio === '9:16') {
+    return {
+      width: 1080,
+      height: 1920,
+      formatName: 'FFVideoFormatVertical1080x1920p30',
+    }
+  }
+  return {
+    width: 1920,
+    height: 1080,
+    formatName: 'FFVideoFormat1080p30',
+  }
+}
+
+function sanitizeReelName(value: string): string {
+  const normalized = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  if (!normalized) return 'OPENFRM'
+  return normalized.slice(0, 8)
+}
+
+function framesToTimecode(totalFrames: number, fps: number): string {
+  const safeFrames = Math.max(0, Math.floor(totalFrames))
+  const frames = safeFrames % fps
+  const totalSeconds = Math.floor(safeFrames / fps)
+  const seconds = totalSeconds % 60
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const minutes = totalMinutes % 60
+  const hours = Math.floor(totalMinutes / 60)
+
+  const pad2 = (value: number) => String(value).padStart(2, '0')
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}:${pad2(frames)}`
+}
+
+async function exportEdl(payload: ExportEdlPayload): Promise<ExportEdlResult> {
+  const videosDir = path.resolve(path.join(getDataDir(), 'videos'))
+  const exportsDir = path.join(videosDir, 'exports')
+  await fs.mkdir(exportsDir, { recursive: true })
+
+  const clipByShotId = new Map(payload.clips.map((clip) => [clip.shotId, clip]))
+  const orderedClips = payload.orderedShotIds
+    .map((shotId) => clipByShotId.get(shotId))
+    .filter(Boolean) as AutoEditClip[]
+  const selectedClips = orderedClips.length > 0 ? orderedClips : payload.clips
+
+  if (selectedClips.length === 0) {
+    throw new Error('No clips available for EDL export')
+  }
+
+  for (const clip of selectedClips) {
+    if (!isSubPath(clip.path, videosDir)) {
+      throw new Error('Clip path is outside videos directory')
+    }
+    await fs.access(clip.path)
+  }
+
+  const fps = Math.max(1, Math.floor(payload.fps ?? 30))
+  const projectName = (payload.projectName || 'OpenFrame Export').trim() || 'OpenFrame Export'
+  const title = sanitizeReelName(projectName)
+
+  let recordStartFrames = 0
+  const lines: string[] = [
+    `TITLE: ${title}`,
+    'FCM: NON-DROP FRAME',
+    '',
+  ]
+
+  selectedClips.forEach((clip, index) => {
+    const trimStartSec = Math.max(0, clip.trimStartSec ?? 0)
+    const trimEndRaw = clip.trimEndSec ?? trimStartSec + 3
+    const durationSec = Math.max(0.1, trimEndRaw - trimStartSec)
+
+    const sourceInFrames = Math.round(trimStartSec * fps)
+    const sourceOutFrames = sourceInFrames + Math.max(1, Math.round(durationSec * fps))
+    const recordInFrames = recordStartFrames
+    const recordOutFrames = recordInFrames + (sourceOutFrames - sourceInFrames)
+    recordStartFrames = recordOutFrames
+
+    const eventNo = String(index + 1).padStart(3, '0')
+    const reelName = sanitizeReelName(clip.title || path.basename(clip.path, path.extname(clip.path)) || `SHOT${eventNo}`)
+
+    lines.push(
+      `${eventNo}  ${reelName} V     C        ${framesToTimecode(sourceInFrames, fps)} ${framesToTimecode(sourceOutFrames, fps)} ${framesToTimecode(recordInFrames, fps)} ${framesToTimecode(recordOutFrames, fps)}`,
+      `* FROM CLIP NAME: ${(clip.title || path.basename(clip.path)).trim() || `Shot ${eventNo}`}`,
+      `* SOURCE FILE: ${clip.path}`,
+      '',
+    )
+  })
+
+  const runId = Date.now().toString(36)
+  const outputPath = path.join(exportsDir, `timeline_${runId}.edl`)
+  await fs.writeFile(outputPath, `${lines.join('\n')}\n`, 'utf8')
+  return { outputPath }
+}
+
+async function exportFcpxml(payload: ExportFcpxmlPayload): Promise<ExportFcpxmlResult> {
+  const videosDir = path.resolve(path.join(getDataDir(), 'videos'))
+  const exportsDir = path.join(videosDir, 'exports')
+  await fs.mkdir(exportsDir, { recursive: true })
+
+  const clipByShotId = new Map(payload.clips.map((clip) => [clip.shotId, clip]))
+  const orderedClips = payload.orderedShotIds
+    .map((shotId) => clipByShotId.get(shotId))
+    .filter(Boolean) as AutoEditClip[]
+
+  const selectedClips = orderedClips.length > 0 ? orderedClips : payload.clips
+
+  if (selectedClips.length === 0) {
+    throw new Error('No clips available for FCPXML export')
+  }
+
+  for (const clip of selectedClips) {
+    if (!isSubPath(clip.path, videosDir)) {
+      throw new Error('Clip path is outside videos directory')
+    }
+    await fs.access(clip.path)
+  }
+
+  const fps = 30
+  const format = formatResourceByRatio(payload.ratio)
+  const runId = Date.now().toString(36)
+  const projectName = (payload.projectName || 'OpenFrame Export').trim() || 'OpenFrame Export'
+
+  const assets = selectedClips.map((clip, index) => {
+    const trimStartSec = Math.max(0, clip.trimStartSec ?? 0)
+    const trimEndRaw = clip.trimEndSec ?? trimStartSec + 3
+    const trimDurationSec = Math.max(0.1, trimEndRaw - trimStartSec)
+    return {
+      id: `r_asset_${String(index + 1)}`,
+      name: (clip.title || path.basename(clip.path, path.extname(clip.path)) || `Shot ${String(index + 1)}`).trim() || `Shot ${String(index + 1)}`,
+      uid: escapeXml(clip.path),
+      mediaSrc: pathToFileURL(clip.path).toString(),
+      startSec: trimStartSec,
+      durationSec: trimDurationSec,
+    }
+  })
+
+  let timelineOffsetSec = 0
+  const spineClips = assets.map((asset) => {
+    const clip = {
+      ...asset,
+      offsetSec: timelineOffsetSec,
+    }
+    timelineOffsetSec += asset.durationSec
+    return clip
+  })
+
+  const totalDurationSec = Math.max(0.1, spineClips.reduce((sum, clip) => sum + clip.durationSec, 0))
+
+  const fcpxml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE fcpxml>',
+    '<fcpxml version="1.11">',
+    '  <resources>',
+    `    <format id="r_format" name="${escapeXml(format.formatName)}" frameDuration="1/${String(fps)}s" width="${String(format.width)}" height="${String(format.height)}" colorSpace="1-1-1 (Rec. 709)"/>`,
+    ...assets.flatMap((asset) => [
+      `    <asset id="${asset.id}" name="${escapeXml(asset.name)}" uid="${asset.uid}" start="${secToFcpxTime(asset.startSec, fps)}" duration="${secToFcpxTime(asset.durationSec, fps)}" hasVideo="1" hasAudio="0" format="r_format">`,
+      `      <media-rep kind="original-media" src="${escapeXml(asset.mediaSrc)}"/>`,
+      '    </asset>',
+    ]),
+    '  </resources>',
+    '  <library>',
+    `    <event name="${escapeXml(projectName)}">`,
+    `      <project name="${escapeXml(`${projectName} Timeline`)}">`,
+    `        <sequence format="r_format" duration="${secToFcpxTime(totalDurationSec, fps)}" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">`,
+    '          <spine>',
+    ...spineClips.map((clip) => `            <asset-clip name="${escapeXml(clip.name)}" ref="${clip.id}" offset="${secToFcpxTime(clip.offsetSec, fps)}" start="${secToFcpxTime(clip.startSec, fps)}" duration="${secToFcpxTime(clip.durationSec, fps)}"/>`),
+    '          </spine>',
+    '        </sequence>',
+    '      </project>',
+    '    </event>',
+    '  </library>',
+    '</fcpxml>',
+  ].join('\n')
+
+  const outputPath = path.join(exportsDir, `timeline_${runId}.fcpxml`)
+  await fs.writeFile(outputPath, fcpxml, 'utf8')
+  return { outputPath }
+}
+
 async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditResult> {
   const videosDir = path.resolve(path.join(getDataDir(), 'videos'))
   const editsDir = path.join(videosDir, 'edits')
@@ -88,8 +308,7 @@ async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditRes
   await fs.mkdir(workDir, { recursive: true })
 
   const normalizedPaths: string[] = []
-  for (let index = 0; index < selectedClips.length; index += 1) {
-    const clip = selectedClips[index]
+  for (const [index, clip] of selectedClips.entries()) {
     const normalizedPath = path.join(workDir, `clip_${String(index + 1).padStart(3, '0')}.mp4`)
 
     const inputArgs: string[] = ['-y']
@@ -169,5 +388,17 @@ export function registerMediaHandlers() {
       }
       throw error
     }
+  })
+
+  ipcMain.handle('media:exportFcpxml', async (_event, payload: ExportFcpxmlPayload) => {
+    const result = await exportFcpxml(payload)
+    await shell.openPath(path.dirname(result.outputPath))
+    return result
+  })
+
+  ipcMain.handle('media:exportEdl', async (_event, payload: ExportEdlPayload) => {
+    const result = await exportEdl(payload)
+    await shell.openPath(path.dirname(result.outputPath))
+    return result
   })
 }
