@@ -87,7 +87,14 @@ type ShotRow = {
   created_at: number
 }
 type ChunkSearchResult = { chunk_id: number; document_id: string; content: string; chunk_index: number; distance: number }
-type DataInfo = { defaultDir: string; currentDir: string; pendingDir: string; dbSize: number; thumbsSize: number }
+type DataInfo = {
+  defaultDir: string
+  currentDir: string
+  pendingDir: string
+  dbSize: number
+  thumbsSize: number
+  videosSize: number
+}
 
 // Used in Renderer process, expose in `preload.ts`
 interface Window {
@@ -263,6 +270,7 @@ interface Window {
   }
   dataAPI: {
     getInfo: () => Promise<DataInfo>
+    cleanupUnusedMedia: () => Promise<{ removedImages: number; removedVideos: number; freedBytes: number }>
     selectDirectory: () => Promise<string | null>
     setDirectory: (dir: string) => Promise<void>
     resetDirectory: () => Promise<void>

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, X, Plus, Upload, Download, CheckCircle, XCircle, Loader, PencilLine, Check } from 'lucide-react'
+import { Eye, EyeOff, X, Plus, Upload, Download, CheckCircle, XCircle, Loader, PencilLine, Check, Trash2 } from 'lucide-react'
 import {
-  AI_PROVIDERS,
+  getAllProviders,
+  getProviderById,
+  isBuiltInProvider,
   providerColor,
   getSelectableModelsByType,
   getEnabledProviderModels,
@@ -10,6 +12,7 @@ import {
   type AIConfig,
   type ModelDef,
   type ModelType,
+  type ProviderDef,
 } from '@openframe/providers'
 
 // ── Provider avatar ────────────────────────────────────────────────────────────
@@ -61,9 +64,22 @@ const MODEL_TYPE_SECTIONS: { type: ModelType; labelKey: string }[] = [
   { type: 'embedding', labelKey: 'settings.aiEmbeddingModel' },
 ]
 
-export const EMBEDDING_PROVIDERS = AI_PROVIDERS.filter((p) =>
-  p.models.some((m) => m.type === 'embedding'),
-)
+function normalizeProviderId(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, '-')
+}
+
+function omitRecordKey<T extends Record<string, unknown>>(record: T, key: string): T {
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
+function omitModelKeysByProvider(record: Record<string, boolean>, providerId: string): Record<string, boolean> {
+  const prefix = `${providerId}:`
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !key.startsWith(prefix)),
+  )
+}
 
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +91,31 @@ interface AISettingsPanelProps {
 export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
   const { t } = useTranslation()
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
+  const [addingProvider, setAddingProvider] = useState(false)
+  const [addProviderError, setAddProviderError] = useState('')
+  const [newProvider, setNewProvider] = useState<{
+    id: string
+    name: string
+    defaultBaseUrl: string
+    noApiKey: boolean
+  }>({
+    id: '',
+    name: '',
+    defaultBaseUrl: '',
+    noApiKey: false,
+  })
+
+  const allProviders = useMemo(
+    () => getAllProviders(config.customProviders),
+    [config.customProviders],
+  )
+
+  useEffect(() => {
+    if (!selectedProviderId) return
+    if (!allProviders.some((provider) => provider.id === selectedProviderId)) {
+      setSelectedProviderId(null)
+    }
+  }, [allProviders, selectedProviderId])
 
   function updateProvider(
     providerId: string,
@@ -87,21 +128,92 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
     })
   }
 
+  function handleAddProvider() {
+    const id = normalizeProviderId(newProvider.id)
+    const name = newProvider.name.trim()
+    const defaultBaseUrl = newProvider.defaultBaseUrl.trim()
+
+    if (!id || !name) {
+      setAddProviderError(t('settings.aiProviderRequired'))
+      return
+    }
+    if (allProviders.some((provider) => provider.id === id)) {
+      setAddProviderError(t('settings.aiProviderExists'))
+      return
+    }
+
+    onChange({
+      ...config,
+      customProviders: [
+        ...(config.customProviders ?? []),
+        {
+          id,
+          name,
+          ...(newProvider.noApiKey ? { noApiKey: true } : {}),
+          ...(defaultBaseUrl ? { defaultBaseUrl } : {}),
+        },
+      ],
+      providers: {
+        ...config.providers,
+        [id]: config.providers[id] ?? { apiKey: '', baseUrl: '', enabled: false },
+      },
+    })
+
+    setSelectedProviderId(id)
+    setAddingProvider(false)
+    setAddProviderError('')
+    setNewProvider({ id: '', name: '', defaultBaseUrl: '', noApiKey: false })
+  }
+
+  function removeProvider(providerId: string) {
+    const provider = allProviders.find((item) => item.id === providerId)
+    if (!window.confirm(t('settings.aiRemoveProviderConfirm', { name: provider?.name ?? providerId }))) return
+
+    const nextModels = { ...config.models }
+    if (nextModels.text.startsWith(`${providerId}:`)) nextModels.text = ''
+    if (nextModels.image.startsWith(`${providerId}:`)) nextModels.image = ''
+    if (nextModels.video.startsWith(`${providerId}:`)) nextModels.video = ''
+    if (nextModels.embedding.startsWith(`${providerId}:`)) nextModels.embedding = ''
+
+    onChange({
+      ...config,
+      providers: omitRecordKey(config.providers, providerId),
+      customProviders: (config.customProviders ?? []).filter((item) => item.id !== providerId),
+      customModels: omitRecordKey(config.customModels, providerId),
+      enabledModels: omitModelKeysByProvider(config.enabledModels, providerId),
+      hiddenModels: omitModelKeysByProvider(config.hiddenModels, providerId),
+      models: nextModels,
+    })
+    setSelectedProviderId(null)
+  }
+
   const selectedProvider = selectedProviderId
-    ? AI_PROVIDERS.find((p) => p.id === selectedProviderId) ?? null
+    ? allProviders.find((provider) => provider.id === selectedProviderId) ?? null
     : null
+  const selectedProviderIsCustom = !!selectedProvider && !isBuiltInProvider(selectedProvider.id)
 
   return (
     <div className="flex h-full overflow-hidden">
 
       {/* ── Left: Provider List ── */}
-      <div className="w-52 shrink-0 border-r border-base-300 flex flex-col">
+      <div className="w-56 shrink-0 border-r border-base-300 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-base-300 shrink-0">
           <span className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
             {t('settings.aiProviders')}
           </span>
           <div className="flex gap-0.5">
+            <button
+              className="btn btn-ghost btn-xs px-1.5"
+              title={t('settings.aiAddProvider')}
+              onClick={() => {
+                setAddingProvider((value) => !value)
+                setAddProviderError('')
+                setNewProvider({ id: '', name: '', defaultBaseUrl: '', noApiKey: false })
+              }}
+            >
+              <Plus size={12} />
+            </button>
             <button className="btn btn-ghost btn-xs px-1.5" title={t('settings.aiImport')}>
               <Upload size={12} />
             </button>
@@ -111,9 +223,68 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
           </div>
         </div>
 
+        {addingProvider && (
+          <div className="px-3 py-2 border-b border-base-300 flex flex-col gap-1.5 bg-base-100">
+            <input
+              className="input input-bordered input-xs font-mono"
+              placeholder={t('settings.aiProviderIdPlaceholder')}
+              value={newProvider.id}
+              onChange={(e) => {
+                setAddProviderError('')
+                setNewProvider((prev) => ({ ...prev, id: e.target.value }))
+              }}
+              autoFocus
+            />
+            <input
+              className="input input-bordered input-xs"
+              placeholder={t('settings.aiProviderNamePlaceholder')}
+              value={newProvider.name}
+              onChange={(e) => {
+                setAddProviderError('')
+                setNewProvider((prev) => ({ ...prev, name: e.target.value }))
+              }}
+            />
+            <input
+              className="input input-bordered input-xs"
+              placeholder={t('settings.aiBaseUrlPlaceholder')}
+              value={newProvider.defaultBaseUrl}
+              onChange={(e) => {
+                setAddProviderError('')
+                setNewProvider((prev) => ({ ...prev, defaultBaseUrl: e.target.value }))
+              }}
+            />
+            <label className="label cursor-pointer px-0 min-h-0 h-auto justify-start gap-2">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-xs"
+                checked={newProvider.noApiKey}
+                onChange={(e) => setNewProvider((prev) => ({ ...prev, noApiKey: e.target.checked }))}
+              />
+              <span className="label-text text-xs">{t('settings.aiProviderNoApiKey')}</span>
+            </label>
+            {addProviderError ? (
+              <p className="text-[11px] text-error">{addProviderError}</p>
+            ) : null}
+            <div className="flex justify-end gap-1">
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => {
+                  setAddingProvider(false)
+                  setAddProviderError('')
+                }}
+              >
+                {t('settings.cancel')}
+              </button>
+              <button className="btn btn-primary btn-xs" onClick={handleAddProvider}>
+                {t('settings.aiAddProvider')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Provider items */}
         <div className="flex-1 overflow-auto py-1">
-          {AI_PROVIDERS.map((provider) => {
+          {allProviders.map((provider) => {
             const cfg = config.providers[provider.id] ?? { apiKey: '', baseUrl: '', enabled: false }
             const isSelected = selectedProviderId === provider.id
 
@@ -156,6 +327,8 @@ export function AISettingsPanel({ config, onChange }: AISettingsPanelProps) {
             provider={selectedProvider}
             config={config}
             onChange={onChange}
+            isCustomProvider={selectedProviderIsCustom}
+            onRemoveProvider={selectedProviderIsCustom ? () => removeProvider(selectedProvider.id) : undefined}
           />
         )}
       </div>
@@ -272,6 +445,10 @@ export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChang
   const { t } = useTranslation()
   const [storedDim, setStoredDim] = useState<number>(0)
   const [confirmKey, setConfirmKey] = useState<string | null>(null)
+  const allProviders = useMemo(
+    () => getAllProviders(config.customProviders),
+    [config.customProviders],
+  )
 
   useEffect(() => {
     window.vectorsAPI.getDimension().then(setStoredDim)
@@ -281,7 +458,7 @@ export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChang
 
   function getDimForKey(key: string): number | undefined {
     const [providerId, modelId] = key.split(':')
-    const provider = AI_PROVIDERS.find((p) => p.id === providerId)
+    const provider = getProviderById(providerId, config.customProviders)
     const builtin = provider?.models.find((m) => m.id === modelId)
     if (builtin?.dimension) return builtin.dimension
     const custom = (config.customModels[providerId] ?? []).find((m) => m.id === modelId)
@@ -308,9 +485,10 @@ export function EmbeddingPanel({ config, onChange }: { config: AIConfig; onChang
 
   const confirmDim = confirmKey ? getDimForKey(confirmKey) : undefined
 
-  // Only show providers that are enabled AND have embedding models
-  const availableProviders = EMBEDDING_PROVIDERS.filter(
-    (p) => config.providers[p.id]?.enabled,
+  const availableProviders = allProviders.filter(
+    (provider) =>
+      !!config.providers[provider.id]?.enabled
+      && getEnabledProviderModels(provider.id, config, 'embedding').length > 0,
   )
 
   return (
@@ -410,14 +588,22 @@ function typeBadgeClass(type: ModelType): string {
 }
 
 interface ProviderDetailProps {
-  provider: (typeof AI_PROVIDERS)[number]
+  provider: ProviderDef
   config: AIConfig
   onChange: (c: AIConfig) => void
+  isCustomProvider?: boolean
+  onRemoveProvider?: () => void
 }
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error'
 
-function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
+function ProviderDetail({
+  provider,
+  config,
+  onChange,
+  isCustomProvider = false,
+  onRemoveProvider,
+}: ProviderDetailProps) {
   const { t } = useTranslation()
   const [showKey, setShowKey] = useState(false)
   const [addingModel, setAddingModel] = useState(false)
@@ -658,6 +844,15 @@ function ProviderDetail({ provider, config, onChange }: ProviderDetailProps) {
         <span className={`badge ${cfg.enabled ? 'badge-success' : 'badge-ghost'}`}>
           {cfg.enabled ? t('settings.aiEnabled') : t('settings.aiDisabled')}
         </span>
+        {isCustomProvider && onRemoveProvider && (
+          <button
+            className="btn btn-ghost btn-xs btn-square ml-auto text-error"
+            title={t('settings.aiRemoveProvider')}
+            onClick={onRemoveProvider}
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
 
       {/* Scrollable body */}

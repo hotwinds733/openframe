@@ -6,9 +6,9 @@ import { app } from 'electron'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import * as schema from '@openframe/db'
+import { getProviderById, type AIConfig } from '@openframe/providers'
 import { store } from './store'
 import { getDataDir } from './data_dir'
-import { AI_PROVIDERS } from '@openframe/providers'
 
 const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3')
@@ -101,13 +101,15 @@ export function getDb() {
     }
 
     // Determine embedding dimension from configured model
-    const cfg = store.get('ai_config')
+    const cfg = store.get('ai_config') as AIConfig
     const embeddingKey = cfg.models.embedding
     let dimension = 1024  // sensible default
     if (embeddingKey) {
       const [providerId, modelId] = embeddingKey.split(':')
-      const provider = AI_PROVIDERS.find((p) => p.id === providerId)
-      const model = provider?.models.find((m) => m.id === modelId)
+      const provider = getProviderById(providerId, cfg.customProviders)
+      const builtinModel = provider?.models.find((m) => m.id === modelId)
+      const customModel = (cfg.customModels[providerId] ?? []).find((m) => m.id === modelId)
+      const model = builtinModel ?? customModel
       if (model?.dimension) dimension = model.dimension
     }
 

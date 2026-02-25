@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createXai } from '@ai-sdk/xai'
 import { createAzure } from '@ai-sdk/azure'
 import { createTogetherAI } from '@ai-sdk/togetherai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateImage } from 'ai'
 import type { ImageModel } from 'ai'
 import type { AIProviderConfig } from '../config'
@@ -52,7 +53,12 @@ export function buildImageModel(providerId: string, modelId: string, cfg: AIProv
     case 'qwen':
       return customRest(providerId, modelId, 'image', cfg)
     default:
-      return null
+      if (!baseURL) return null
+      return createOpenAICompatible({
+        name: providerId,
+        baseURL,
+        apiKey: apiKey ?? 'openframe',
+      }).imageModel(modelId)
   }
 }
 

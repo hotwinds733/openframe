@@ -31,6 +31,7 @@ export function registerAIBaseAndMediaHandlers() {
         providers: {
           [providerId]: { apiKey, baseUrl: baseUrl ?? '', enabled: true },
         },
+        customProviders: [],
         models: { text: '', image: '', video: '', embedding: '' },
         customModels: {},
         enabledModels: {},

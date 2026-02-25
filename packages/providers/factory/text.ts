@@ -8,6 +8,7 @@ import { createGroq } from '@ai-sdk/groq'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createTogetherAI } from '@ai-sdk/togetherai'
 import { createPerplexity } from '@ai-sdk/perplexity'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { AIProviderConfig } from '../config'
 import type { AnyModel } from './types'
 import { createVolcengineTextModel } from './platforms/volcengine'
@@ -52,6 +53,11 @@ export function buildTextModel(providerId: string, modelId: string, cfg: AIProvi
     case 'ollama':
       return createOllamaTextModel(modelId, baseURL)
     default:
-      return null
+      if (!baseURL) return null
+      return createOpenAICompatible({
+        name: providerId,
+        baseURL,
+        apiKey: apiKey ?? 'openframe',
+      })(modelId)
   }
 }

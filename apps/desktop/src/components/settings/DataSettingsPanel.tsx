@@ -12,15 +12,32 @@ function formatBytes(bytes: number): string {
 
 export function DataSettingsPanel() {
   const { t } = useTranslation()
-  const [info, setInfo] = useState<{ defaultDir: string; currentDir: string; pendingDir: string; dbSize: number; thumbsSize: number } | null>(null)
+  const [info, setInfo] = useState<{
+    defaultDir: string
+    currentDir: string
+    pendingDir: string
+    dbSize: number
+    thumbsSize: number
+    videosSize: number
+  } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [cleaning, setCleaning] = useState(false)
+  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<{
+    removedImages: number
+    removedVideos: number
+    freedBytes: number
+  } | null>(null)
 
   function load() {
     setLoading(true)
-    window.dataAPI.getInfo().then((data) => {
-      setInfo(data)
-      setLoading(false)
-    })
+    window.dataAPI.getInfo()
+      .then((data) => {
+        setInfo(data)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
   useEffect(() => { load() }, [])
@@ -35,6 +52,17 @@ export function DataSettingsPanel() {
   async function handleReset() {
     await window.dataAPI.resetDirectory()
     load()
+  }
+
+  async function handleCleanup() {
+    setCleaning(true)
+    try {
+      const result = await window.dataAPI.cleanupUnusedMedia()
+      setCleanupResult(result)
+      load()
+    } finally {
+      setCleaning(false)
+    }
   }
 
   const hasPending = info && info.pendingDir !== '' && info.pendingDir !== info.currentDir
@@ -101,8 +129,62 @@ export function DataSettingsPanel() {
                 <span className="text-sm">{t('settings.dataThumbsSize')}</span>
                 <span className="text-sm font-mono text-base-content/60">{formatBytes(info.thumbsSize)}</span>
               </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm">{t('settings.dataVideosSize')}</span>
+                <span className="text-sm font-mono text-base-content/60">{formatBytes(info.videosSize)}</span>
+              </div>
             </div>
           </section>
+
+          <section className="flex flex-col gap-2">
+            <h4 className="text-sm font-semibold">{t('settings.dataCleanup')}</h4>
+            <p className="text-xs text-base-content/60">{t('settings.dataCleanupHint')}</p>
+            <div>
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => setCleanupConfirmOpen(true)}
+                disabled={cleaning}
+              >
+                {cleaning ? t('settings.dataCleanupRunning') : t('settings.dataCleanupButton')}
+              </button>
+            </div>
+            {cleanupResult && (
+              <p className="text-xs text-base-content/60">
+                {t('settings.dataCleanupResult', {
+                  images: cleanupResult.removedImages,
+                  videos: cleanupResult.removedVideos,
+                  size: formatBytes(cleanupResult.freedBytes),
+                })}
+              </p>
+            )}
+          </section>
+
+          {cleanupConfirmOpen && (
+            <dialog className="modal modal-open">
+              <div className="modal-box max-w-sm">
+                <h3 className="font-bold mb-3">{t('settings.dataCleanup')}</h3>
+                <p className="text-sm text-base-content/70">{t('settings.dataCleanupConfirm')}</p>
+                <div className="modal-action">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setCleanupConfirmOpen(false)}
+                  >
+                    {t('settings.cancel')}
+                  </button>
+                  <button
+                    className="btn btn-warning btn-sm"
+                    onClick={() => {
+                      setCleanupConfirmOpen(false)
+                      void handleCleanup()
+                    }}
+                  >
+                    {t('settings.dataCleanupButton')}
+                  </button>
+                </div>
+              </div>
+              <div className="modal-backdrop" onClick={() => setCleanupConfirmOpen(false)} />
+            </dialog>
+          )}
         </>
       )}
     </div>

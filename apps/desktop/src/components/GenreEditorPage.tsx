@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from '@tanstack/react-db'
 import { ArrowLeft, Sparkles, SendHorizontal } from 'lucide-react'
-import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
+import { getSelectableModelsByType, type AIConfig } from '@openframe/providers'
 import { genresCollection } from '../db/genres_collection'
 import { ThumbnailGeneratorField } from './ThumbnailGeneratorField'
 
@@ -34,20 +34,13 @@ function extFromMediaType(mediaType: string | undefined): string {
 }
 
 function getTextModelOptions(config: AIConfig): TextModelOption[] {
-  const result: TextModelOption[] = []
-  for (const provider of AI_PROVIDERS) {
-    const providerCfg = config.providers[provider.id]
-    if (!providerCfg?.enabled) continue
-    const builtin = provider.models.filter((m) => m.type === 'text')
-    const custom = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'text')
-    for (const model of [...builtin, ...custom]) {
-      const key = `${provider.id}:${model.id}`
-      if (!config.enabledModels?.[key]) continue
-      if (config.hiddenModels?.[key]) continue
-      result.push({ key, providerName: provider.name, modelName: model.name || model.id })
-    }
-  }
-  return result
+  return getSelectableModelsByType(config, 'text').flatMap(({ provider, models }) =>
+    models.map((model) => ({
+      key: `${provider.id}:${model.id}`,
+      providerName: provider.name,
+      modelName: model.name || model.id,
+    })),
+  )
 }
 
 
@@ -76,6 +69,7 @@ export function GenreEditorPage({ genreId }: { genreId?: string }) {
     window.aiAPI.getConfig().then((cfg) => {
       const ai = (cfg as AIConfig) ?? {
         providers: {},
+        customProviders: [],
         models: { text: '', image: '', video: '', embedding: '' },
         customModels: {},
         enabledModels: {},

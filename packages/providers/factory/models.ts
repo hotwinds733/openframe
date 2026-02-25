@@ -1,6 +1,6 @@
 import type { LanguageModel, ImageModel } from 'ai'
 import type { AIConfig } from '../config'
-import { AI_PROVIDERS, type ModelType } from '../providers'
+import { getProviderById, type ModelType } from '../providers'
 import { buildTextModel } from './text'
 import { buildImageModel } from './image'
 import { buildVideoModel } from './video'
@@ -11,7 +11,7 @@ function resolveModelType(
   modelId: string,
   config: AIConfig,
 ): ModelType {
-  const providerDef = AI_PROVIDERS.find((p) => p.id === providerId)
+  const providerDef = getProviderById(providerId, config.customProviders)
   const allModels = [
     ...(providerDef?.models ?? []),
     ...(config.customModels[providerId] ?? []),
@@ -25,12 +25,17 @@ function buildModel(
   config: AIConfig,
   type: ModelType,
 ): AnyModel | null {
+  const providerDef = getProviderById(providerId, config.customProviders)
   const cfg = config.providers[providerId]
   if (!cfg) return null
+  const normalizedCfg = {
+    ...cfg,
+    baseUrl: cfg.baseUrl || providerDef?.defaultBaseUrl || '',
+  }
 
-  if (type === 'text') return buildTextModel(providerId, modelId, cfg)
-  if (type === 'image') return buildImageModel(providerId, modelId, cfg)
-  if (type === 'video') return buildVideoModel(providerId, modelId, cfg)
+  if (type === 'text') return buildTextModel(providerId, modelId, normalizedCfg)
+  if (type === 'image') return buildImageModel(providerId, modelId, normalizedCfg)
+  if (type === 'video') return buildVideoModel(providerId, modelId, normalizedCfg)
   if (type === 'embedding') return null
   return null
 }

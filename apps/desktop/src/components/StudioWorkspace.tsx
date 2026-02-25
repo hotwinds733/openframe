@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, Clock3, Loader2, ListChecks, ScrollText, Sparkles, Trash2, XCircle } from 'lucide-react'
-import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
+import { getSelectableModelsByType, type AIConfig } from '@openframe/providers'
 import PQueue from 'p-queue'
 import { ScriptEditor } from './ScriptEditor'
 import { CharacterPanel, type CreateCharacterDraft } from './CharacterPanel'
@@ -168,39 +168,24 @@ export function StudioWorkspace({
       .getConfig()
       .then((cfg) => {
         const config = cfg as AIConfig
-        const textOptions: Array<{ key: string; label: string }> = []
-        const imageOptions: Array<{ key: string; label: string }> = []
-        const videoOptions: Array<{ key: string; label: string }> = []
-        for (const provider of AI_PROVIDERS) {
-          const providerCfg = config.providers[provider.id]
-          if (!providerCfg?.enabled) continue
-          const builtinText = provider.models.filter((m) => m.type === 'text')
-          const customText = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'text')
-          for (const model of [...builtinText, ...customText]) {
-            const key = `${provider.id}:${model.id}`
-            if (!config.enabledModels?.[key]) continue
-            if (config.hiddenModels?.[key]) continue
-            textOptions.push({ key, label: `${provider.name} / ${model.name || model.id}` })
-          }
-
-          const builtinImage = provider.models.filter((m) => m.type === 'image')
-          const customImage = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'image')
-          for (const model of [...builtinImage, ...customImage]) {
-            const key = `${provider.id}:${model.id}`
-            if (!config.enabledModels?.[key]) continue
-            if (config.hiddenModels?.[key]) continue
-            imageOptions.push({ key, label: `${provider.name} / ${model.name || model.id}` })
-          }
-
-          const builtinVideo = provider.models.filter((m) => m.type === 'video')
-          const customVideo = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'video')
-          for (const model of [...builtinVideo, ...customVideo]) {
-            const key = `${provider.id}:${model.id}`
-            if (!config.enabledModels?.[key]) continue
-            if (config.hiddenModels?.[key]) continue
-            videoOptions.push({ key, label: `${provider.name} / ${model.name || model.id}` })
-          }
-        }
+        const textOptions = getSelectableModelsByType(config, 'text').flatMap(({ provider, models }) =>
+          models.map((model) => ({
+            key: `${provider.id}:${model.id}`,
+            label: `${provider.name} / ${model.name || model.id}`,
+          })),
+        )
+        const imageOptions = getSelectableModelsByType(config, 'image').flatMap(({ provider, models }) =>
+          models.map((model) => ({
+            key: `${provider.id}:${model.id}`,
+            label: `${provider.name} / ${model.name || model.id}`,
+          })),
+        )
+        const videoOptions = getSelectableModelsByType(config, 'video').flatMap(({ provider, models }) =>
+          models.map((model) => ({
+            key: `${provider.id}:${model.id}`,
+            label: `${provider.name} / ${model.name || model.id}`,
+          })),
+        )
 
         setTextModelOptions(textOptions)
         if (config.models?.text && textOptions.some((item) => item.key === config.models.text)) {

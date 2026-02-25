@@ -1,6 +1,8 @@
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { EmbeddingModel } from 'ai'
 import type { AIConfig } from '../config'
+import { getProviderById } from '../providers'
 import { createVolcengineEmbeddingModel } from './platforms/volcengine'
 import { createOllamaEmbeddingModel } from './platforms/ollama'
 
@@ -9,10 +11,11 @@ export function createEmbeddingModel(
   modelId: string,
   config: AIConfig,
 ): EmbeddingModel | null {
+  const provider = getProviderById(providerId, config.customProviders)
   const cfg = config.providers[providerId]
   if (!cfg) return null
   const apiKey = cfg.apiKey || undefined
-  const baseURL = cfg.baseUrl || undefined
+  const baseURL = cfg.baseUrl || provider?.defaultBaseUrl || undefined
 
   switch (providerId) {
     case 'openai':
@@ -22,7 +25,12 @@ export function createEmbeddingModel(
     case 'ollama':
       return createOllamaEmbeddingModel(modelId, apiKey, baseURL)
     default:
-      return null
+      if (!baseURL) return null
+      return createOpenAICompatible({
+        name: providerId,
+        baseURL,
+        apiKey: apiKey ?? 'openframe',
+      }).embeddingModel(modelId)
   }
 }
 

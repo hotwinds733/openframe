@@ -22,6 +22,15 @@ export interface ProviderDef {
   defaultBaseUrl?: string
 }
 
+export interface CustomProviderDef {
+  id: string
+  name: string
+  /** Provider authenticates via base URL only, no API key required */
+  noApiKey?: boolean
+  /** Default base URL shown as placeholder and used as fallback */
+  defaultBaseUrl?: string
+}
+
 // ── Official Vercel AI SDK providers ─────────────────────────────────────────
 
 export const AI_PROVIDERS: ProviderDef[] = [
@@ -198,3 +207,47 @@ export const AI_PROVIDERS: ProviderDef[] = [
     ],
   },
 ]
+
+const BUILTIN_PROVIDER_IDS = new Set(AI_PROVIDERS.map((provider) => provider.id))
+
+function normalizeCustomProvider(provider: CustomProviderDef): ProviderDef | null {
+  const id = provider.id.trim()
+  if (!id) return null
+  const name = provider.name.trim() || id
+  const defaultBaseUrl = provider.defaultBaseUrl?.trim()
+  return {
+    id,
+    name,
+    models: [],
+    ...(provider.noApiKey ? { noApiKey: true } : {}),
+    ...(defaultBaseUrl ? { defaultBaseUrl } : {}),
+  }
+}
+
+export function isBuiltInProvider(providerId: string): boolean {
+  return BUILTIN_PROVIDER_IDS.has(providerId)
+}
+
+export function getAllProviders(customProviders: CustomProviderDef[] = []): ProviderDef[] {
+  if (!customProviders.length) return AI_PROVIDERS
+
+  const seen = new Set(BUILTIN_PROVIDER_IDS)
+  const custom: ProviderDef[] = []
+
+  for (const provider of customProviders) {
+    const normalized = normalizeCustomProvider(provider)
+    if (!normalized) continue
+    if (seen.has(normalized.id)) continue
+    seen.add(normalized.id)
+    custom.push(normalized)
+  }
+
+  return [...AI_PROVIDERS, ...custom]
+}
+
+export function getProviderById(
+  providerId: string,
+  customProviders: CustomProviderDef[] = [],
+): ProviderDef | undefined {
+  return getAllProviders(customProviders).find((provider) => provider.id === providerId)
+}

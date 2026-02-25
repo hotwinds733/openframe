@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { AI_PROVIDERS, type AIConfig } from '@openframe/providers'
+import { getSelectableModelsByType, type AIConfig } from '@openframe/providers'
 import { Upload, X } from 'lucide-react'
 
 type ImageModelOption = { key: string; providerName: string; modelName: string }
@@ -22,20 +22,13 @@ interface ThumbnailGeneratorFieldProps {
 }
 
 function getImageModelOptions(config: AIConfig): ImageModelOption[] {
-  const result: ImageModelOption[] = []
-  for (const provider of AI_PROVIDERS) {
-    const providerCfg = config.providers[provider.id]
-    if (!providerCfg?.enabled) continue
-    const builtin = provider.models.filter((m) => m.type === 'image')
-    const custom = (config.customModels[provider.id] ?? []).filter((m) => m.type === 'image')
-    for (const model of [...builtin, ...custom]) {
-      const key = `${provider.id}:${model.id}`
-      if (!config.enabledModels?.[key]) continue
-      if (config.hiddenModels?.[key]) continue
-      result.push({ key, providerName: provider.name, modelName: model.name || model.id })
-    }
-  }
-  return result
+  return getSelectableModelsByType(config, 'image').flatMap(({ provider, models }) =>
+    models.map((model) => ({
+      key: `${provider.id}:${model.id}`,
+      providerName: provider.name,
+      modelName: model.name || model.id,
+    })),
+  )
 }
 
 function extFromMediaType(mediaType: string | undefined): string {
@@ -98,6 +91,7 @@ export function ThumbnailGeneratorField({
     window.aiAPI.getConfig().then((cfg) => {
       const ai = (cfg as AIConfig) ?? {
         providers: {},
+        customProviders: [],
         models: { text: '', image: '', video: '', embedding: '' },
         customModels: {},
         enabledModels: {},

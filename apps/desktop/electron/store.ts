@@ -13,6 +13,17 @@ const providerConfigSchema = {
   default: { apiKey: '', baseUrl: '', enabled: false },
 } as const
 
+const customProviderSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    noApiKey: { type: 'boolean', default: false },
+    defaultBaseUrl: { type: 'string', default: '' },
+  },
+  required: ['id', 'name'],
+} as const
+
 const modelDefSchema = {
   type: 'object',
   properties: {
@@ -51,6 +62,11 @@ export const store = new Store<AppSettings>({
           type: 'object',
           additionalProperties: providerConfigSchema,
           default: {},
+        },
+        customProviders: {
+          type: 'array',
+          items: customProviderSchema,
+          default: [],
         },
         models: {
           type: 'object',

@@ -1,8 +1,18 @@
 import type { AIConfig } from './config'
-import { AI_PROVIDERS, type ModelDef, type ModelType, type ProviderDef } from './providers'
+import {
+  getAllProviders,
+  getProviderById,
+  type ModelDef,
+  type ModelType,
+  type ProviderDef,
+} from './providers'
 
-function providerById(providerId: string): ProviderDef | undefined {
-  return AI_PROVIDERS.find((provider) => provider.id === providerId)
+export function getConfigProviders(config: AIConfig): ProviderDef[] {
+  return getAllProviders(config.customProviders)
+}
+
+function providerById(providerId: string, config: AIConfig): ProviderDef | undefined {
+  return getProviderById(providerId, config.customProviders)
 }
 
 export function getProviderModels(
@@ -10,7 +20,7 @@ export function getProviderModels(
   config: AIConfig,
   type?: ModelType,
 ): ModelDef[] {
-  const provider = providerById(providerId)
+  const provider = providerById(providerId, config)
   if (!provider) return []
   const builtin = provider.models
   const custom = config.customModels[providerId] ?? []
@@ -40,7 +50,7 @@ export function getSelectableModelsByType(
   config: AIConfig,
   type: ModelType,
 ): Array<{ provider: ProviderDef; models: ModelDef[] }> {
-  return AI_PROVIDERS
+  return getConfigProviders(config)
     .filter((provider) => !!config.providers[provider.id]?.enabled)
     .map((provider) => ({
       provider,

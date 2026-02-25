@@ -1,4 +1,4 @@
-import type { ModelDef, ModelType } from './providers'
+import type { CustomProviderDef, ModelDef, ModelType } from './providers'
 
 export interface AIProviderConfig {
   apiKey: string
@@ -9,6 +9,8 @@ export interface AIProviderConfig {
 export interface AIConfig {
   /** Provider-level settings (API key, base URL, enabled) */
   providers: Record<string, AIProviderConfig>
+  /** User-added custom providers */
+  customProviders: CustomProviderDef[]
   /** App-wide default model selection per type */
   models: {
     text: string   // "providerId:modelId" or ""
@@ -31,11 +33,41 @@ export interface AIConfig {
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   providers: {},
+  customProviders: [],
   models: { text: '', image: '', video: '', embedding: '' },
   customModels: {},
   enabledModels: {},
   hiddenModels: {},
   concurrency: { image: 5, video: 5 },
+}
+
+function normalizeCustomProviders(raw: unknown): CustomProviderDef[] {
+  if (!Array.isArray(raw)) return []
+
+  const result: CustomProviderDef[] = []
+  const seen = new Set<string>()
+
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<CustomProviderDef>
+    const id = typeof row.id === 'string' ? row.id.trim() : ''
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+
+    const nameRaw = typeof row.name === 'string' ? row.name.trim() : ''
+    const defaultBaseUrl = typeof row.defaultBaseUrl === 'string'
+      ? row.defaultBaseUrl.trim()
+      : ''
+
+    result.push({
+      id,
+      name: nameRaw || id,
+      ...(row.noApiKey === true ? { noApiKey: true } : {}),
+      ...(defaultBaseUrl ? { defaultBaseUrl } : {}),
+    })
+  }
+
+  return result
 }
 
 function normalizeConcurrency(value: unknown, fallback: number): number {
@@ -50,6 +82,7 @@ export function parseAIConfig(raw: string | undefined): AIConfig {
     const parsed = JSON.parse(raw) as Partial<AIConfig>
     return {
       providers: parsed.providers ?? {},
+      customProviders: normalizeCustomProviders(parsed.customProviders),
       models: { ...DEFAULT_AI_CONFIG.models, ...parsed.models },
       customModels: parsed.customModels ?? {},
       enabledModels: parsed.enabledModels ?? {},

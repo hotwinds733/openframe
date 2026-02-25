@@ -248,8 +248,10 @@ contextBridge.exposeInMainWorld('vectorsAPI', {
 })
 
 contextBridge.exposeInMainWorld('dataAPI', {
-  getInfo: (): Promise<{ defaultDir: string; currentDir: string; pendingDir: string; dbSize: number; thumbsSize: number }> =>
+  getInfo: (): Promise<{ defaultDir: string; currentDir: string; pendingDir: string; dbSize: number; thumbsSize: number; videosSize: number }> =>
     ipcRenderer.invoke('data:getInfo'),
+  cleanupUnusedMedia: (): Promise<{ removedImages: number; removedVideos: number; freedBytes: number }> =>
+    ipcRenderer.invoke('data:cleanupUnusedMedia'),
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke('data:selectDirectory'),
   setDirectory: (dir: string): Promise<void> =>
