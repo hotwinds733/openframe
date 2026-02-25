@@ -63,6 +63,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Sync desktop app version from tag
+        shell: bash
+        run: |
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Using release version: ${RELEASE_VERSION}"
+          node -e "const fs=require('fs');const p='apps/desktop/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n')" "${RELEASE_VERSION}"
+
       - name: Build renderer and electron bundles
         run: pnpm -C apps/desktop exec vite build && pnpm -C apps/desktop exec tsc
 
