@@ -221,6 +221,13 @@ interface Window {
   windowAPI: {
     openStudio: (payload: { projectId: string; seriesId: string }) => Promise<void>
   }
+  mediaAPI: {
+    autoEdit: (payload: {
+      ratio: '16:9' | '9:16'
+      orderedShotIds: string[]
+      clips: Array<{ shotId: string; path: string; trimStartSec?: number; trimEndSec?: number }>
+    }) => Promise<{ outputPath: string }>
+  }
   categoriesAPI: {
     getAll: () => Promise<CategoryRow[]>
     insert: (category: CategoryRow) => Promise<void>

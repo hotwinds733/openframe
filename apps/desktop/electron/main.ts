@@ -6,6 +6,7 @@ import { closeDb } from './db'
 import { registerSettingsHandlers } from './handlers/settings'
 import { registerThumbnailsHandlers } from './handlers/thumbnails'
 import { registerAIHandlers } from './handlers/ai'
+import { registerMediaHandlers } from './handlers/media'
 import { getDataDir } from './data_dir'
 import { registerDatabaseHandlers } from './db-ops/register/handlers'
 
@@ -183,6 +184,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers()
   registerThumbnailsHandlers()
   registerAIHandlers()
+  registerMediaHandlers()
 
   ipcMain.handle('window:openStudio', (_event, payload: { projectId: string; seriesId: string }) => {
     createStudioWindow(payload.projectId, payload.seriesId)

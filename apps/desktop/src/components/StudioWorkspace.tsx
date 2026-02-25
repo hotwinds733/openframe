@@ -8,6 +8,7 @@ import { CharacterPanel, type CreateCharacterDraft } from './CharacterPanel'
 import { ScenePanel, type CreateSceneDraft } from './ScenePanel'
 import { ShotPanel, type ShotCard, type ShotDraft } from './ShotPanel'
 import { VideoPanel } from './VideoPanel'
+import { ProductionWorkspacePanel, type EditedClipPayload } from './ProductionWorkspacePanel'
 import { seriesCollection } from '../db/series_collection'
 import type { Character } from '../db/characters_collection'
 
@@ -59,7 +60,7 @@ export function StudioWorkspace({
   scriptContent,
 }: StudioWorkspaceProps) {
   const { t } = useTranslation()
-  const [activeStep, setActiveStep] = useState<'script' | 'character' | 'storyboard' | 'shot' | 'production'>('script')
+  const [activeStep, setActiveStep] = useState<'script' | 'character' | 'storyboard' | 'shot' | 'production' | 'export'>('script')
   const [extractMode, setExtractMode] = useState<'merge' | 'replace' | null>(null)
   const [sceneExtractMode, setSceneExtractMode] = useState<'merge' | 'replace' | null>(null)
   const [characterBusyId, setCharacterBusyId] = useState<string | null>(null)
@@ -88,6 +89,8 @@ export function StudioWorkspace({
   const [productionFrames, setProductionFrames] = useState<Record<string, { first: string | null; last: string | null; video: string | null }>>({})
   const [productionFrameBusyKey, setProductionFrameBusyKey] = useState<string | null>(null)
   const [productionVideoBusyShotId, setProductionVideoBusyShotId] = useState<string | null>(null)
+  const [productionAutoEditBusy, setProductionAutoEditBusy] = useState(false)
+  const [productionAutoEditVideo, setProductionAutoEditVideo] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -239,7 +242,7 @@ export function StudioWorkspace({
       { key: 'storyboard', label: t('projectLibrary.stepStoryboard') },
       { key: 'shot', label: t('projectLibrary.stepShot') },
       { key: 'production', label: t('projectLibrary.stepProduction') },
-      { key: 'export', label: t('projectLibrary.stepExport') },
+      // { key: 'export', label: t('projectLibrary.stepExport') },
     ],
     [t],
   )
@@ -248,6 +251,22 @@ export function StudioWorkspace({
   const showScenePanel = activeStep === 'storyboard'
   const showShotPanel = activeStep === 'shot'
   const showVideoPanel = activeStep === 'production'
+  const showProductionWorkspacePanel = activeStep === 'export'
+
+  const productionTimelineClips = useMemo(
+    () => seriesShots
+      .slice()
+      .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
+      .filter((shot) => Boolean(shot.production_video))
+      .map((shot) => ({
+        shotId: shot.id,
+        shotIndex: shot.shot_index,
+        title: shot.title,
+        path: shot.production_video!,
+        durationSec: shot.duration_sec,
+      })),
+    [seriesShots],
+  )
 
   function normalizeCharacterName(name: string): string {
     return name.trim().toLowerCase()
@@ -338,6 +357,26 @@ export function StudioWorkspace({
       binary += String.fromCharCode(...chunk)
     }
     return btoa(binary)
+  }
+
+  function parseJsonObject(text: string): Record<string, unknown> | null {
+    const trimmed = text.trim()
+    if (!trimmed) return null
+
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+    const raw = (fenced?.[1] ?? trimmed).trim()
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start < 0 || end < start) return null
+
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null
+    } catch {
+      return null
+    }
   }
 
   async function readThumbnailAsBase64(value: string | null): Promise<string | null> {
@@ -1396,6 +1435,115 @@ export function StudioWorkspace({
     }, 'media')
   }
 
+  function queueAutoEditVideo(prompt: string, editedClips?: EditedClipPayload[]) {
+    // When editedClips are provided (from timeline editor), use them directly
+    if (editedClips && editedClips.length > 0) {
+      const taskTitle = t('projectLibrary.productionAutoEdit')
+      setProductionAutoEditBusy(true)
+      setShotError('')
+
+      enqueueTask(taskTitle, async () => {
+        try {
+          const orderedShotIds = editedClips.map((clip) => clip.shotId)
+          const editResult = await window.mediaAPI.autoEdit({
+            ratio: projectRatio,
+            orderedShotIds,
+            clips: editedClips.map((clip) => ({
+              shotId: clip.shotId,
+              path: clip.path,
+              trimStartSec: clip.trimStartSec,
+              trimEndSec: clip.trimEndSec,
+            })),
+          })
+          setProductionAutoEditVideo(editResult.outputPath)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : t('projectLibrary.taskFailed')
+          setShotError(message)
+        } finally {
+          setProductionAutoEditBusy(false)
+        }
+      }, 'media')
+      return
+    }
+
+    // Fallback: derive clips from seriesShots (no trim info)
+    const clips = seriesShots
+      .slice()
+      .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
+      .filter((shot) => Boolean(shot.production_video))
+      .map((shot) => ({
+        shotId: shot.id,
+        title: shot.title,
+        action: shot.action,
+        dialogue: shot.dialogue,
+        durationSec: shot.duration_sec,
+        path: shot.production_video!,
+      }))
+
+    if (clips.length === 0) {
+      setShotError(t('projectLibrary.productionNeedVideos'))
+      return
+    }
+
+    const taskTitle = t('projectLibrary.productionAutoEdit')
+    setProductionAutoEditBusy(true)
+    setShotError('')
+
+    enqueueTask(taskTitle, async () => {
+      try {
+        let orderedShotIds = clips.map((clip) => clip.shotId)
+
+        if (selectedTextModelKey) {
+          const clipLines = clips
+            .map((clip, index) => `${index + 1}. ${clip.shotId} | ${clip.title || 'untitled'} | duration=${clip.durationSec}s | action=${clip.action || '-'} | dialogue=${clip.dialogue || '-'}`)
+            .join('\n')
+          const aiContext = [
+            'You are an editing planner. Return JSON only.',
+            `User intent: ${prompt || 'Generate the most coherent story cut.'}`,
+            `Ratio: ${projectRatio}`,
+            'Available clips:',
+            clipLines,
+          ].join('\n')
+          const instruction = 'Return ONLY one JSON object: {"orderedShotIds": string[]}. Keep IDs from the provided list only. Keep between 1 and 20 clips.'
+
+          const result = await window.aiAPI.scriptToolkit({
+            action: 'scene.rewrite',
+            context: aiContext,
+            instruction,
+            modelKey: selectedTextModelKey,
+          })
+
+          if (result.ok) {
+            const parsed = parseJsonObject(result.text)
+            const candidateIds = Array.isArray(parsed?.orderedShotIds)
+              ? parsed?.orderedShotIds.filter((item): item is string => typeof item === 'string')
+              : []
+            if (candidateIds.length > 0) {
+              const valid = new Set(clips.map((clip) => clip.shotId))
+              orderedShotIds = candidateIds.filter((id) => valid.has(id))
+              if (orderedShotIds.length === 0) {
+                orderedShotIds = clips.map((clip) => clip.shotId)
+              }
+            }
+          }
+        }
+
+        const editResult = await window.mediaAPI.autoEdit({
+          ratio: projectRatio,
+          orderedShotIds,
+          clips: clips.map((clip) => ({ shotId: clip.shotId, path: clip.path })),
+        })
+
+        setProductionAutoEditVideo(editResult.outputPath)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('projectLibrary.taskFailed')
+        setShotError(message)
+      } finally {
+        setProductionAutoEditBusy(false)
+      }
+    }, 'media')
+  }
+
   function renderTaskStatusIcon(status: StudioTaskStatus) {
     if (status === 'queued') return <Clock3 size={12} className="text-base-content/55" />
     if (status === 'running') return <Loader2 size={12} className="text-info animate-spin" />
@@ -1466,12 +1614,12 @@ export function StudioWorkspace({
                 key={step.key}
                 type="button"
                 onClick={() => {
-                  if (step.key === 'script' || step.key === 'character' || step.key === 'storyboard' || step.key === 'shot' || step.key === 'production') setActiveStep(step.key)
+                  if (step.key === 'script' || step.key === 'character' || step.key === 'storyboard' || step.key === 'shot' || step.key === 'production' || step.key === 'export') setActiveStep(step.key)
                 }}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 border shrink-0 text-sm font-medium transition-colors ${
-                  (activeStep === 'script' && step.key === 'script') || (activeStep === 'character' && step.key === 'character') || (activeStep === 'storyboard' && step.key === 'storyboard') || (activeStep === 'shot' && step.key === 'shot') || (activeStep === 'production' && step.key === 'production')
+                  (activeStep === 'script' && step.key === 'script') || (activeStep === 'character' && step.key === 'character') || (activeStep === 'storyboard' && step.key === 'storyboard') || (activeStep === 'shot' && step.key === 'shot') || (activeStep === 'production' && step.key === 'production') || (activeStep === 'export' && step.key === 'export')
                     ? 'border-primary/40 bg-primary/10 text-primary'
-                    : idx <= 4
+                    : idx <= 5
                       ? 'border-base-300 hover:border-primary/30 text-base-content/70'
                       : 'border-base-300 text-base-content/45'
                 }`}
@@ -1549,6 +1697,13 @@ export function StudioWorkspace({
             videoBusyShotId={productionVideoBusyShotId}
             onGenerateFrame={(shotId, kind) => queueGenerateProductionFrame(shotId, kind)}
             onGenerateVideo={(shotId, params) => queueGenerateProductionVideo(shotId, params)}
+          />
+        ) : showProductionWorkspacePanel ? (
+          <ProductionWorkspacePanel
+            clips={productionTimelineClips}
+            autoEditBusy={productionAutoEditBusy}
+            masterVideoPath={productionAutoEditVideo}
+            onAutoEdit={(prompt, editedClips) => queueAutoEditVideo(prompt, editedClips)}
           />
         ) : (
           <ScriptEditor

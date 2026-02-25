@@ -311,6 +311,15 @@ contextBridge.exposeInMainWorld('windowAPI', {
     ipcRenderer.invoke('window:openStudio', payload),
 })
 
+contextBridge.exposeInMainWorld('mediaAPI', {
+  autoEdit: (payload: {
+    ratio: '16:9' | '9:16'
+    orderedShotIds: string[]
+    clips: Array<{ shotId: string; path: string; trimStartSec?: number; trimEndSec?: number }>
+  }): Promise<{ outputPath: string }> =>
+    ipcRenderer.invoke('media:autoEdit', payload),
+})
+
 contextBridge.exposeInMainWorld('categoriesAPI', {
   getAll: (): Promise<CategoryRow[]> => ipcRenderer.invoke('categories:getAll'),
   insert: (category: CategoryRow): Promise<void> => ipcRenderer.invoke('categories:insert', category),
