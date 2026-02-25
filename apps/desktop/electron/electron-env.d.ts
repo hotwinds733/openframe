@@ -242,6 +242,11 @@ interface Window {
       orderedShotIds: string[]
       clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
     }) => Promise<{ outputPath: string }>
+    exportMergedVideo: (payload: {
+      ratio: '16:9' | '9:16'
+      orderedShotIds: string[]
+      clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
+    }) => Promise<{ outputPath?: string; canceled?: boolean }>
     exportFcpxml: (payload: {
       ratio: '16:9' | '9:16'
       orderedShotIds: string[]

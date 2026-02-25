@@ -19,10 +19,12 @@ interface VideoPanelProps {
   framesByShot: Record<string, FramePair>
   frameBusyKey: string | null
   videoBusyShotId: string | null
+  exportingMergedVideo: boolean
   exportingTimeline: boolean
   exportingEdl: boolean
   onGenerateFrame: (shotId: string, kind: 'first' | 'last') => void
   onGenerateAllFirstLastFrames: () => void
+  onExportMergedVideo: () => void
   onExportFcpxml: () => void
   onExportEdl: () => void
   onGenerateVideo: (shotId: string, params: { durationSec: number; ratio: string; mode: VideoFrameMode }) => void
@@ -45,10 +47,12 @@ export function VideoPanel({
   framesByShot,
   frameBusyKey,
   videoBusyShotId,
+  exportingMergedVideo,
   exportingTimeline,
   exportingEdl,
   onGenerateFrame,
   onGenerateAllFirstLastFrames,
+  onExportMergedVideo,
   onExportFcpxml,
   onExportEdl,
   onGenerateVideo,
@@ -254,6 +258,15 @@ export function VideoPanel({
             >
               <Sparkles size={14} />
               {t('projectLibrary.productionGenerateFirstLastFrames')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline join-item w-full"
+              disabled={!shots.some((shot) => Boolean(shot.production_video)) || exportingMergedVideo}
+              onClick={onExportMergedVideo}
+            >
+              <Film size={14} />
+              {exportingMergedVideo ? t('projectLibrary.aiStreaming') : t('projectLibrary.productionExportMergedVideo')}
             </button>
             <button
               type="button"

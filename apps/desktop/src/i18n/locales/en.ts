@@ -225,6 +225,7 @@ export default {
     productionVideoWindow: 'Video Window',
     productionVideoPlaceholder: 'Generated video will appear here.',
     productionGenerateVideo: 'Generate Video',
+    productionExportMergedVideo: 'Export Merged Video',
     productionExportFcpxml: 'Export FCPXML Timeline',
     productionExportEdl: 'Export EDL (PR/DaVinci)',
     productionAutoEdit: 'AI Auto Edit',

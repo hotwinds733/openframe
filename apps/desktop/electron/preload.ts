@@ -328,6 +328,12 @@ contextBridge.exposeInMainWorld('mediaAPI', {
     clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
   }): Promise<{ outputPath: string }> =>
     ipcRenderer.invoke('media:autoEdit', payload),
+  exportMergedVideo: (payload: {
+    ratio: '16:9' | '9:16'
+    orderedShotIds: string[]
+    clips: Array<{ shotId: string; path: string; title?: string; trimStartSec?: number; trimEndSec?: number }>
+  }): Promise<{ outputPath?: string; canceled?: boolean }> =>
+    ipcRenderer.invoke('media:exportMergedVideo', payload),
   exportFcpxml: (payload: {
     ratio: '16:9' | '9:16'
     orderedShotIds: string[]

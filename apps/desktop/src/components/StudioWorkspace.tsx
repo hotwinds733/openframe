@@ -91,6 +91,7 @@ export function StudioWorkspace({
   const [productionVideoBusyShotId, setProductionVideoBusyShotId] = useState<string | null>(null)
   const [productionAutoEditBusy, setProductionAutoEditBusy] = useState(false)
   const [productionAutoEditVideo, setProductionAutoEditVideo] = useState<string | null>(null)
+  const [exportingMergedVideo, setExportingMergedVideo] = useState(false)
   const [exportingTimeline, setExportingTimeline] = useState(false)
   const [exportingEdl, setExportingEdl] = useState(false)
 
@@ -1583,20 +1584,65 @@ export function StudioWorkspace({
     }, 'media')
   }
 
-  function queueExportFcpxml() {
-    if (exportingTimeline) return
-
-    const clips = seriesShots
+  function buildProductionVideoClips(includeTrim = true) {
+    return seriesShots
       .slice()
       .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
       .filter((shot) => Boolean(shot.production_video))
-      .map((shot) => ({
-        shotId: shot.id,
-        title: shot.title,
-        path: shot.production_video!,
-        trimStartSec: 0,
-        trimEndSec: Math.max(0.1, shot.duration_sec || 3),
-      }))
+      .map((shot) => {
+        const base = {
+          shotId: shot.id,
+          title: shot.title,
+          path: shot.production_video!,
+        }
+        if (!includeTrim) return base
+        return {
+          ...base,
+          trimStartSec: 0,
+          trimEndSec: Math.max(0.1, shot.duration_sec || 3),
+        }
+      })
+  }
+
+  function queueExportMergedVideo() {
+    if (exportingMergedVideo) return
+
+    const clips = buildProductionVideoClips(false)
+    if (clips.length === 0) {
+      setShotError(t('projectLibrary.productionNeedVideos'))
+      return
+    }
+
+    setShotError('')
+    setExportingMergedVideo(true)
+    setProductionAutoEditVideo(null)
+
+    enqueueTask(t('projectLibrary.productionExportMergedVideo'), async () => {
+      try {
+        const result = await window.mediaAPI.exportMergedVideo({
+          ratio: projectRatio,
+          orderedShotIds: clips.map((clip) => clip.shotId),
+          clips,
+        })
+        if (result.canceled) return
+        if (!result.outputPath) {
+          throw new Error(t('projectLibrary.taskFailed'))
+        }
+        setProductionAutoEditVideo(result.outputPath)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('projectLibrary.taskFailed')
+        setShotError(message)
+        throw error
+      } finally {
+        setExportingMergedVideo(false)
+      }
+    }, 'media')
+  }
+
+  function queueExportFcpxml() {
+    if (exportingTimeline) return
+
+    const clips = buildProductionVideoClips(true)
 
     if (clips.length === 0) {
       setShotError(t('projectLibrary.productionNeedVideos'))
@@ -1627,17 +1673,7 @@ export function StudioWorkspace({
   function queueExportEdl() {
     if (exportingEdl) return
 
-    const clips = seriesShots
-      .slice()
-      .sort((left, right) => left.shot_index - right.shot_index || left.created_at - right.created_at)
-      .filter((shot) => Boolean(shot.production_video))
-      .map((shot) => ({
-        shotId: shot.id,
-        title: shot.title,
-        path: shot.production_video!,
-        trimStartSec: 0,
-        trimEndSec: Math.max(0.1, shot.duration_sec || 3),
-      }))
+    const clips = buildProductionVideoClips(true)
 
     if (clips.length === 0) {
       setShotError(t('projectLibrary.productionNeedVideos'))
@@ -1925,10 +1961,12 @@ export function StudioWorkspace({
             framesByShot={productionFrames}
             frameBusyKey={productionFrameBusyKey}
             videoBusyShotId={productionVideoBusyShotId}
+            exportingMergedVideo={exportingMergedVideo}
             exportingTimeline={exportingTimeline}
             exportingEdl={exportingEdl}
             onGenerateFrame={(shotId, kind) => queueGenerateProductionFrame(shotId, kind)}
             onGenerateAllFirstLastFrames={queueGenerateAllFirstLastFrames}
+            onExportMergedVideo={queueExportMergedVideo}
             onExportFcpxml={queueExportFcpxml}
             onExportEdl={queueExportEdl}
             onGenerateVideo={(shotId, params) => queueGenerateProductionVideo(shotId, params)}

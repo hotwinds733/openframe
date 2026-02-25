@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { ipcMain, shell } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { getDataDir } from '../data_dir'
 
 type AutoEditClip = {
@@ -21,6 +21,13 @@ type AutoEditPayload = {
 
 type AutoEditResult = {
   outputPath: string
+}
+
+type ExportMergedVideoPayload = AutoEditPayload
+
+type ExportMergedVideoResult = {
+  outputPath?: string
+  canceled?: boolean
 }
 
 type ExportFcpxmlPayload = {
@@ -53,9 +60,9 @@ function isSubPath(targetPath: string, parentPath: string): boolean {
 
 function ratioFilter(ratio: '16:9' | '9:16'): string {
   if (ratio === '9:16') {
-    return 'scale=if(gt(a,9/16),1080,-2):if(gt(a,9/16),-2,1920),pad=1080:1920:(1080-iw)/2:(1920-ih)/2:black'
+    return 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'
   }
-  return 'scale=if(gt(a,16/9),1920,-2):if(gt(a,16/9),-2,1080),pad=1920:1080:(1920-iw)/2:(1080-ih)/2:black'
+  return 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black'
 }
 
 function runFfmpeg(args: string[]): Promise<void> {
@@ -278,7 +285,10 @@ async function exportFcpxml(payload: ExportFcpxmlPayload): Promise<ExportFcpxmlR
   return { outputPath }
 }
 
-async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditResult> {
+async function autoEditWithFfmpeg(
+  payload: AutoEditPayload,
+  options?: { outputPath?: string },
+): Promise<AutoEditResult> {
   const videosDir = path.resolve(path.join(getDataDir(), 'videos'))
   const editsDir = path.join(videosDir, 'edits')
   await fs.mkdir(editsDir, { recursive: true })
@@ -327,7 +337,6 @@ async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditRes
     }
 
     inputArgs.push(
-      '-an',
       '-vf',
       ratioFilter(payload.ratio),
       '-r',
@@ -340,6 +349,14 @@ async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditRes
       '23',
       '-pix_fmt',
       'yuv420p',
+      '-c:a',
+      'aac',
+      '-ar',
+      '48000',
+      '-ac',
+      '2',
+      '-b:a',
+      '192k',
       normalizedPath,
     )
 
@@ -353,7 +370,10 @@ async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditRes
     .join('\n')
   await fs.writeFile(concatListPath, `${concatBody}\n`, 'utf8')
 
-  const outputPath = path.join(editsDir, `auto_edit_${runId}.mp4`)
+  const outputPath = options?.outputPath
+    ? path.resolve(options.outputPath)
+    : path.join(editsDir, `auto_edit_${runId}.mp4`)
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
   await runFfmpeg([
     '-y',
     '-f',
@@ -370,6 +390,14 @@ async function autoEditWithFfmpeg(payload: AutoEditPayload): Promise<AutoEditRes
     '22',
     '-pix_fmt',
     'yuv420p',
+    '-c:a',
+    'aac',
+    '-ar',
+    '48000',
+    '-ac',
+    '2',
+    '-b:a',
+    '192k',
     '-movflags',
     '+faststart',
     outputPath,
@@ -388,6 +416,33 @@ export function registerMediaHandlers() {
       }
       throw error
     }
+  })
+
+  ipcMain.handle('media:exportMergedVideo', async (_event, payload: ExportMergedVideoPayload) => {
+    const defaultExportDir = app.getPath('downloads')
+    await fs.mkdir(defaultExportDir, { recursive: true })
+
+    const focusedWindow = BrowserWindow.getFocusedWindow()
+    const options: OpenDialogOptions = {
+      title: 'Select export folder',
+      defaultPath: defaultExportDir,
+      properties: ['openDirectory', 'createDirectory'],
+    }
+    const folderPick = focusedWindow
+      ? await dialog.showOpenDialog(focusedWindow, options)
+      : await dialog.showOpenDialog(options)
+
+    if (folderPick.canceled || folderPick.filePaths.length === 0) {
+      return { canceled: true } as ExportMergedVideoResult
+    }
+
+    const targetFolder = folderPick.filePaths[0]
+    const runId = Date.now().toString(36)
+    const outputPath = path.join(targetFolder, `openframe_merged_${runId}.mp4`)
+
+    const result = await autoEditWithFfmpeg(payload, { outputPath })
+    await shell.openPath(path.dirname(result.outputPath))
+    return { outputPath: result.outputPath } as ExportMergedVideoResult
   })
 
   ipcMain.handle('media:exportFcpxml', async (_event, payload: ExportFcpxmlPayload) => {

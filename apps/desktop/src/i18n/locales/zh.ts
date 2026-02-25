@@ -225,6 +225,7 @@ export default {
     productionVideoWindow: '视频生成窗口',
     productionVideoPlaceholder: '生成后的视频会显示在这里。',
     productionGenerateVideo: '生成视频',
+    productionExportMergedVideo: '导出合并视频',
     productionExportFcpxml: '导出 FCPXML 时间线',
     productionExportEdl: '导出 EDL（PR/达芬奇）',
     productionAutoEdit: 'AI 自动剪辑',
