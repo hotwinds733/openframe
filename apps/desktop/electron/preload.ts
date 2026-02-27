@@ -75,7 +75,7 @@ type CharacterRow = {
 }
 type SceneRow = {
   id: string
-  series_id: string
+  project_id: string
   title: string
   location: string
   time: string
@@ -302,12 +302,12 @@ contextBridge.exposeInMainWorld('charactersAPI', {
 
 contextBridge.exposeInMainWorld('scenesAPI', {
   getAll: (): Promise<SceneRow[]> => ipcRenderer.invoke('scenes:getAll'),
-  getBySeries: (seriesId: string): Promise<SceneRow[]> => ipcRenderer.invoke('scenes:getBySeries', seriesId),
+  getByProject: (projectId: string): Promise<SceneRow[]> => ipcRenderer.invoke('scenes:getByProject', projectId),
   insert: (scene: SceneRow): Promise<void> => ipcRenderer.invoke('scenes:insert', scene),
   update: (scene: SceneRow): Promise<void> => ipcRenderer.invoke('scenes:update', scene),
   delete: (id: string): Promise<void> => ipcRenderer.invoke('scenes:delete', id),
-  replaceBySeries: (payload: { seriesId: string; scenes: SceneRow[] }): Promise<void> =>
-    ipcRenderer.invoke('scenes:replaceBySeries', payload),
+  replaceByProject: (payload: { projectId: string; scenes: SceneRow[] }): Promise<void> =>
+    ipcRenderer.invoke('scenes:replaceByProject', payload),
 })
 
 contextBridge.exposeInMainWorld('shotsAPI', {

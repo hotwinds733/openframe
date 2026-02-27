@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Clapperboard, FolderOpen, MapPin, PlusCircle, RefreshCw, ScrollText, Sparkles, Trash2, Upload, X } from 'lucide-react'
 
 type SceneCard = {
   id: string
-  series_id: string
+  project_id: string
   title: string
   location: string
   time: string
@@ -34,9 +34,6 @@ interface ScenePanelProps {
   sceneBusyId: string | null
   showAdvancedActions?: boolean
   showSmartGenerate?: boolean
-  seriesOptions?: Array<{ id: string; title: string }>
-  onAddSceneWithSeries?: (draft: CreateSceneDraft, seriesId: string) => void
-  onUpdateSceneWithSeries?: (id: string, draft: CreateSceneDraft, seriesId: string) => void
   onAddScene: (draft: CreateSceneDraft) => void
   onUpdateScene: (id: string, draft: CreateSceneDraft) => void
   onSmartGenerateScene: (draft: CreateSceneDraft) => Promise<{ ok: true; draft: CreateSceneDraft } | { ok: false; error: string }>
@@ -61,9 +58,6 @@ export function ScenePanel({
   sceneBusyId,
   showAdvancedActions = true,
   showSmartGenerate = true,
-  seriesOptions,
-  onAddSceneWithSeries,
-  onUpdateSceneWithSeries,
   onAddScene,
   onUpdateScene,
   onSmartGenerateScene,
@@ -81,7 +75,6 @@ export function ScenePanel({
   const [createUploading, setCreateUploading] = useState(false)
   const [createGenerating, setCreateGenerating] = useState(false)
   const createUploadInputRef = useRef<HTMLInputElement | null>(null)
-  const [createSeriesId, setCreateSeriesId] = useState(seriesOptions?.[0]?.id ?? '')
   const [createDraft, setCreateDraft] = useState<CreateSceneDraft>({
     title: '',
     location: '',
@@ -91,23 +84,9 @@ export function ScenePanel({
     shot_notes: '',
     thumbnail: null,
   })
-  const seriesNameMap = useMemo(
-    () => new Map((seriesOptions ?? []).map((item) => [item.id, item.title])),
-    [seriesOptions],
-  )
-
-  useEffect(() => {
-    if (!seriesOptions || seriesOptions.length === 0) return
-    setCreateSeriesId((prev) => {
-      if (seriesOptions.some((item) => item.id === prev)) return prev
-      return seriesOptions[0]?.id ?? ''
-    })
-  }, [seriesOptions])
-
   function handleOpenCreate() {
     setEditingSceneId(null)
     setCreateError('')
-    setCreateSeriesId(seriesOptions?.[0]?.id ?? '')
     setCreateDraft({ title: '', location: '', time: '', mood: '', description: '', shot_notes: '', thumbnail: null })
     setCreateOpen(true)
   }
@@ -124,7 +103,6 @@ export function ScenePanel({
       shot_notes: scene.shot_notes,
       thumbnail: scene.thumbnail,
     })
-    setCreateSeriesId(scene.series_id)
     setCreateOpen(true)
   }
 
@@ -179,12 +157,6 @@ export function ScenePanel({
       setCreateError(t('projectLibrary.sceneTitleRequired'))
       return
     }
-    if (seriesOptions && seriesOptions.length > 0 && !createSeriesId) {
-      setCreateError(t('projectLibrary.sceneSeriesRequired'))
-      return
-    }
-
-    const targetSeriesId = createSeriesId || seriesOptions?.[0]?.id || ''
     const payload: CreateSceneDraft = {
       title: createDraft.title.trim(),
       location: createDraft.location.trim(),
@@ -195,13 +167,7 @@ export function ScenePanel({
       thumbnail: createDraft.thumbnail,
     }
     if (editingSceneId) {
-      if (onUpdateSceneWithSeries) {
-        onUpdateSceneWithSeries(editingSceneId, payload, targetSeriesId)
-      } else {
-        onUpdateScene(editingSceneId, payload)
-      }
-    } else if (onAddSceneWithSeries) {
-      onAddSceneWithSeries(payload, targetSeriesId)
+      onUpdateScene(editingSceneId, payload)
     } else {
       onAddScene(payload)
     }
@@ -259,7 +225,6 @@ export function ScenePanel({
               </div>
               <div className="p-3 flex-1 min-h-0 flex flex-col">
                 <p className="text-base font-semibold line-clamp-1">{scene.title || t('projectLibrary.sceneCardUntitled')}</p>
-                {seriesNameMap.get(scene.series_id) ? <p className="mt-1 text-[11px] text-base-content/55 line-clamp-1">{seriesNameMap.get(scene.series_id)}</p> : null}
                 <div className="mt-2 flex gap-1 text-xs text-base-content/65"><MapPin size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-1">{[scene.location, scene.time].filter(Boolean).join(' · ') || '-'}</span></div>
                 <div className="mt-2 flex gap-1 text-xs text-base-content/65"><Sparkles size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.mood || '-'}</span></div>
                 <div className="mt-2 flex gap-1 text-xs text-base-content/65"><ScrollText size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.description || '-'}</span></div>
@@ -298,9 +263,6 @@ export function ScenePanel({
                   </div>
                 </aside>
                 <div className="self-start grid grid-cols-1 md:grid-cols-2 gap-2 content-start">
-                  {seriesOptions && seriesOptions.length > 0 ? (
-                    <label className="form-control flex flex-col items-start gap-1 md:col-span-2"><span className="text-sm font-medium text-base-content/75">{t('projectLibrary.sceneSeriesLabel')}</span><select className="select select-bordered select-sm" value={createSeriesId} onChange={(e) => setCreateSeriesId(e.target.value)}><option value="">{t('projectLibrary.sceneSeriesPlaceholder')}</option>{seriesOptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-                  ) : null}
                   <label className="form-control flex flex-col items-start gap-1"><span className="text-sm font-medium text-base-content/75">{t('projectLibrary.sceneTitleLabel')}</span><input className="input input-bordered input-sm" placeholder={t('projectLibrary.sceneTitlePlaceholder')} value={createDraft.title} onChange={(e) => setCreateDraft((p) => ({ ...p, title: e.target.value }))} /></label>
                   <label className="form-control flex flex-col items-start gap-1"><span className="text-sm font-medium text-base-content/75">{t('projectLibrary.sceneLocationLabel')}</span><input className="input input-bordered input-sm" placeholder={t('projectLibrary.sceneLocationPlaceholder')} value={createDraft.location} onChange={(e) => setCreateDraft((p) => ({ ...p, location: e.target.value }))} /></label>
                   <label className="form-control flex flex-col items-start gap-1"><span className="text-sm font-medium text-base-content/75">{t('projectLibrary.sceneTimeLabel')}</span><input className="input input-bordered input-sm" placeholder={t('projectLibrary.sceneTimePlaceholder')} value={createDraft.time} onChange={(e) => setCreateDraft((p) => ({ ...p, time: e.target.value }))} /></label>

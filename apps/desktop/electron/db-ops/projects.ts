@@ -59,7 +59,8 @@ export function updateProject(project: ProjectRow): void {
 export function deleteProject(id: string): void {
   runInTransaction((raw) => {
     raw.prepare('DELETE FROM characters WHERE project_id = ?').run(id)
-    raw.prepare('DELETE FROM scenes WHERE series_id IN (SELECT id FROM series WHERE project_id = ?)').run(id)
+    raw.prepare('DELETE FROM shots WHERE scene_id IN (SELECT id FROM scenes WHERE project_id = ?)').run(id)
+    raw.prepare('DELETE FROM scenes WHERE project_id = ?').run(id)
     raw.prepare('DELETE FROM shots WHERE series_id IN (SELECT id FROM series WHERE project_id = ?)').run(id)
     raw.prepare('DELETE FROM series WHERE project_id = ?').run(id)
     raw.prepare('DELETE FROM projects WHERE id = ?').run(id)

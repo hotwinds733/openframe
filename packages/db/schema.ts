@@ -38,7 +38,7 @@ export const characters = sqliteTable('characters', {
 
 export const scenes = sqliteTable('scenes', {
   id: text('id').primaryKey(),
-  series_id: text('series_id').notNull(),
+  project_id: text('project_id').notNull(),
   title: text('title').notNull().$default(() => ''),
   location: text('location').notNull().$default(() => ''),
   time: text('time').notNull().$default(() => ''),

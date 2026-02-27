@@ -71,6 +71,13 @@
       "when": 1771982985060,
       "tag": "0009_cooing_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1772153596943,
+      "tag": "0010_scenes_project_link",
+      "breakpoints": true
     }
   ]
 }

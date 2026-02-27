@@ -60,7 +60,6 @@ export function updateSeries(series: SeriesRow): void {
 export function deleteSeries(id: string): void {
   const row = getRawDb().prepare('SELECT project_id FROM series WHERE id = ?').get(id) as { project_id: string } | undefined
   runInTransaction((raw) => {
-    raw.prepare('DELETE FROM scenes WHERE series_id = ?').run(id)
     raw.prepare('DELETE FROM shots WHERE series_id = ?').run(id)
     raw.prepare('DELETE FROM series WHERE id = ?').run(id)
   })

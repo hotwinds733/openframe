@@ -17,7 +17,7 @@ type CharacterAge = Character['age']
 
 type Scene = {
   id: string
-  series_id: string
+  project_id: string
   title: string
   location: string
   time: string
@@ -113,12 +113,12 @@ export function StudioWorkspace({
 
   useEffect(() => {
     let active = true
-    if (!seriesId) {
+    if (!projectId) {
       setSeriesScenes([])
       return
     }
     window.scenesAPI
-      .getBySeries(seriesId)
+      .getByProject(projectId)
       .then((rows) => {
         if (active) setSeriesScenes(rows)
       })
@@ -128,7 +128,7 @@ export function StudioWorkspace({
     return () => {
       active = false
     }
-  }, [seriesId])
+  }, [projectId])
 
   useEffect(() => {
     let active = true
@@ -724,7 +724,7 @@ export function StudioWorkspace({
 
         const extractedRows: Scene[] = result.scenes.map((item, index) => ({
           id: crypto.randomUUID(),
-          series_id: seriesId,
+          project_id: projectId,
           title: item.title,
           location: item.location,
           time: item.time,
@@ -736,7 +736,7 @@ export function StudioWorkspace({
         }))
 
         const nextRows = mode === 'replace' ? extractedRows : mergeScenes(seriesScenes, extractedRows)
-        await window.scenesAPI.replaceBySeries({ seriesId, scenes: nextRows })
+        await window.scenesAPI.replaceByProject({ projectId, scenes: nextRows })
         setSeriesScenes(nextRows)
       } catch {
         setSceneError(t('projectLibrary.aiToolkitFailed'))
@@ -762,11 +762,11 @@ export function StudioWorkspace({
   }
 
   async function handleAddScene(draft: CreateSceneDraft) {
-    if (!seriesId) return
+    if (!projectId) return
     setSceneError('')
     const row: Scene = {
       id: crypto.randomUUID(),
-      series_id: seriesId,
+      project_id: projectId,
       title: draft.title,
       location: draft.location,
       time: draft.time,

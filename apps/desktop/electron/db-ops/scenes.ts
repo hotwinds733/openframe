@@ -3,7 +3,7 @@ import { runInTransaction } from './tx'
 
 export type SceneRow = {
   id: string
-  series_id: string
+  project_id: string
   title: string
   location: string
   time: string
@@ -17,37 +17,67 @@ export type SceneRow = {
 export function ensureScenesSchema(): void {
   const raw = getRawDb()
   raw.exec(
-    'CREATE TABLE IF NOT EXISTS scenes (id text PRIMARY KEY NOT NULL, series_id text NOT NULL, title text NOT NULL DEFAULT \'\', location text NOT NULL DEFAULT \'\', time text NOT NULL DEFAULT \'\', mood text NOT NULL DEFAULT \'\', description text NOT NULL DEFAULT \'\', shot_notes text NOT NULL DEFAULT \'\', thumbnail text, created_at integer NOT NULL)',
+    'CREATE TABLE IF NOT EXISTS scenes (id text PRIMARY KEY NOT NULL, project_id text NOT NULL, title text NOT NULL DEFAULT \'\', location text NOT NULL DEFAULT \'\', time text NOT NULL DEFAULT \'\', mood text NOT NULL DEFAULT \'\', description text NOT NULL DEFAULT \'\', shot_notes text NOT NULL DEFAULT \'\', thumbnail text, created_at integer NOT NULL)',
   )
+
+  const tableInfo = raw.prepare("PRAGMA table_info('scenes')").all() as Array<{ name: string }>
+  const columns = new Set(tableInfo.map((column) => column.name))
+  if (!columns.has('project_id')) {
+    raw.exec('ALTER TABLE scenes ADD COLUMN project_id text')
+  }
+  if (columns.has('series_id')) {
+    raw.exec(`
+      UPDATE scenes
+      SET project_id = (
+        SELECT series.project_id
+        FROM series
+        WHERE series.id = scenes.series_id
+        LIMIT 1
+      )
+      WHERE (project_id IS NULL OR project_id = '')
+    `)
+    raw.exec(`
+      UPDATE scenes
+      SET project_id = (
+        SELECT series.project_id
+        FROM shots
+        INNER JOIN series ON series.id = shots.series_id
+        WHERE shots.scene_id = scenes.id
+        ORDER BY shots.created_at ASC
+        LIMIT 1
+      )
+      WHERE (project_id IS NULL OR project_id = '')
+    `)
+  }
 }
 
 export function getAllScenes(): SceneRow[] {
   const raw = getRawDb()
   return raw
     .prepare(
-      'SELECT id, series_id, title, location, time, mood, description, shot_notes, thumbnail, created_at FROM scenes ORDER BY created_at DESC',
+      'SELECT id, project_id, title, location, time, mood, description, shot_notes, thumbnail, created_at FROM scenes ORDER BY created_at DESC',
     )
     .all() as SceneRow[]
 }
 
-export function getScenesBySeries(seriesId: string): SceneRow[] {
+export function getScenesByProject(projectId: string): SceneRow[] {
   const raw = getRawDb()
   return raw
     .prepare(
-      'SELECT id, series_id, title, location, time, mood, description, shot_notes, thumbnail, created_at FROM scenes WHERE series_id = ? ORDER BY created_at ASC',
+      'SELECT id, project_id, title, location, time, mood, description, shot_notes, thumbnail, created_at FROM scenes WHERE project_id = ? ORDER BY created_at ASC',
     )
-    .all(seriesId) as SceneRow[]
+    .all(projectId) as SceneRow[]
 }
 
 export function insertScene(scene: SceneRow): void {
   const raw = getRawDb()
   raw
     .prepare(
-      'INSERT OR REPLACE INTO scenes (id, series_id, title, location, time, mood, description, shot_notes, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO scenes (id, project_id, title, location, time, mood, description, shot_notes, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .run(
       scene.id,
-      scene.series_id,
+      scene.project_id,
       scene.title,
       scene.location,
       scene.time,
@@ -77,17 +107,19 @@ export function updateScene(scene: SceneRow): void {
     )
 }
 
-export function replaceScenesBySeries(payload: { seriesId: string; scenes: SceneRow[] }): void {
+export function replaceScenesByProject(payload: { projectId: string; scenes: SceneRow[] }): void {
   runInTransaction((raw) => {
-    raw.prepare('DELETE FROM scenes WHERE series_id = ?').run(payload.seriesId)
-    raw.prepare('DELETE FROM shots WHERE series_id = ?').run(payload.seriesId)
+    raw
+      .prepare('DELETE FROM shots WHERE scene_id IN (SELECT id FROM scenes WHERE project_id = ?)')
+      .run(payload.projectId)
+    raw.prepare('DELETE FROM scenes WHERE project_id = ?').run(payload.projectId)
     const insertStmt = raw.prepare(
-      'INSERT INTO scenes (id, series_id, title, location, time, mood, description, shot_notes, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO scenes (id, project_id, title, location, time, mood, description, shot_notes, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
     for (const scene of payload.scenes) {
       insertStmt.run(
         scene.id,
-        payload.seriesId,
+        payload.projectId,
         scene.title,
         scene.location,
         scene.time,

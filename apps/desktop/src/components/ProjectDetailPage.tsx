@@ -11,7 +11,7 @@ import { ScenePanel, type CreateSceneDraft } from './ScenePanel'
 import { StudioWorkspace } from './StudioWorkspace'
 
 type ProjectDetailTab = 'episodes' | 'characters' | 'scenes'
-type Scene = Awaited<ReturnType<Window['scenesAPI']['getBySeries']>>[number]
+type Scene = Awaited<ReturnType<Window['scenesAPI']['getByProject']>>[number]
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const { t } = useTranslation()
@@ -29,15 +29,6 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const projectCharacters = useMemo(
     () => (allCharacters ?? []).filter((item) => item.project_id === projectId).sort((a, b) => a.created_at - b.created_at),
     [allCharacters, projectId],
-  )
-  const seriesSortIndexMap = useMemo(() => new Map(series.map((item) => [item.id, item.sort_index])), [series])
-  const sceneSeriesOptions = useMemo(
-    () =>
-      series.map((item) => ({
-        id: item.id,
-        title: item.title || `${t('projectLibrary.seriesNo')} ${item.sort_index}`,
-      })),
-    [series, t],
   )
   const selectedSeriesId = useMemo(() => {
     const params = new URLSearchParams(location.search)
@@ -61,32 +52,15 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let active = true
-    if (series.length === 0) {
-      setProjectScenes([])
-      setScenesLoading(false)
-      return
-    }
-
     setScenesLoading(true)
-    const sortIndexMap = new Map(series.map((item) => [item.id, item.sort_index]))
-    Promise.all(
-      series.map((item) =>
-        window.scenesAPI
-          .getBySeries(item.id)
-          .catch(() => [] as Scene[]),
-      ),
-    )
-      .then((rowsList) => {
+    window.scenesAPI
+      .getByProject(projectId)
+      .then((rows) => {
         if (!active) return
-        const merged = rowsList
-          .flat()
-          .sort((a, b) => {
-            const aSort = sortIndexMap.get(a.series_id) ?? Number.MAX_SAFE_INTEGER
-            const bSort = sortIndexMap.get(b.series_id) ?? Number.MAX_SAFE_INTEGER
-            if (aSort !== bSort) return aSort - bSort
-            return a.created_at - b.created_at
-          })
-        setProjectScenes(merged)
+        setProjectScenes(rows.sort((a, b) => a.created_at - b.created_at))
+      })
+      .catch(() => {
+        if (active) setProjectScenes([])
       })
       .finally(() => {
         if (active) setScenesLoading(false)
@@ -95,7 +69,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     return () => {
       active = false
     }
-  }, [series])
+  }, [projectId])
 
   const tabs = useMemo<Array<{ key: ProjectDetailTab; label: string; subtitle: string }>>(
     () => [
@@ -214,16 +188,12 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     }
   }
 
-  async function handleAddProjectScene(draft: CreateSceneDraft, seriesId: string) {
-    if (!seriesId) {
-      setSceneError(t('projectLibrary.sceneSeriesRequired'))
-      return
-    }
+  async function handleAddProjectScene(draft: CreateSceneDraft) {
     setSceneError('')
 
     const row: Scene = {
       id: crypto.randomUUID(),
-      series_id: seriesId,
+      project_id: projectId,
       title: draft.title,
       location: draft.location,
       time: draft.time,
@@ -236,46 +206,27 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
     try {
       await window.scenesAPI.insert(row)
-      setProjectScenes((prev) =>
-        [...prev, row].sort((a, b) => {
-          const aSort = seriesSortIndexMap.get(a.series_id) ?? Number.MAX_SAFE_INTEGER
-          const bSort = seriesSortIndexMap.get(b.series_id) ?? Number.MAX_SAFE_INTEGER
-          if (aSort !== bSort) return aSort - bSort
-          return a.created_at - b.created_at
-        }),
-      )
+      setProjectScenes((prev) => [...prev, row].sort((a, b) => a.created_at - b.created_at))
     } catch {
       setSceneError(t('projectLibrary.saveError'))
     }
   }
 
-  async function handleUpdateProjectScene(id: string, draft: CreateSceneDraft, seriesId: string) {
+  async function handleUpdateProjectScene(id: string, draft: CreateSceneDraft) {
     const current = projectScenes.find((item) => item.id === id)
     if (!current) return
-
-    const targetSeriesId = seriesId || current.series_id
-    if (!targetSeriesId) {
-      setSceneError(t('projectLibrary.sceneSeriesRequired'))
-      return
-    }
 
     setSceneError('')
     const nextScene: Scene = {
       ...current,
       ...draft,
-      series_id: targetSeriesId,
     }
     try {
       await window.scenesAPI.update(nextScene)
       setProjectScenes((prev) =>
         prev
           .map((item) => (item.id === id ? nextScene : item))
-          .sort((a, b) => {
-            const aSort = seriesSortIndexMap.get(a.series_id) ?? Number.MAX_SAFE_INTEGER
-            const bSort = seriesSortIndexMap.get(b.series_id) ?? Number.MAX_SAFE_INTEGER
-            if (aSort !== bSort) return aSort - bSort
-            return a.created_at - b.created_at
-          }),
+          .sort((a, b) => a.created_at - b.created_at),
       )
     } catch {
       setSceneError(t('projectLibrary.saveError'))
@@ -540,15 +491,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                   sceneBusyId={null}
                   showAdvancedActions={false}
                   showSmartGenerate
-                  seriesOptions={sceneSeriesOptions}
-                  onAddScene={(draft) => void handleAddProjectScene(draft, sceneSeriesOptions[0]?.id ?? '')}
-                  onAddSceneWithSeries={(draft, seriesId) => void handleAddProjectScene(draft, seriesId)}
-                  onUpdateScene={(id, draft) => {
-                    const current = projectScenes.find((item) => item.id === id)
-                    if (!current) return
-                    void handleUpdateProjectScene(id, draft, current.series_id)
-                  }}
-                  onUpdateSceneWithSeries={(id, draft, seriesId) => void handleUpdateProjectScene(id, draft, seriesId)}
+                  onAddScene={(draft) => void handleAddProjectScene(draft)}
+                  onUpdateScene={(id, draft) => void handleUpdateProjectScene(id, draft)}
                   onSmartGenerateScene={handleSmartGenerateProjectScene}
                   onExtractFromScript={() => undefined}
                   onRegenerateFromScript={() => undefined}

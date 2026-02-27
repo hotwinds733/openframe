@@ -57,7 +57,7 @@ type CharacterRow = {
 }
 type SceneRow = {
   id: string
-  series_id: string
+  project_id: string
   title: string
   location: string
   time: string
@@ -223,11 +223,11 @@ interface Window {
   }
   scenesAPI: {
     getAll: () => Promise<SceneRow[]>
-    getBySeries: (seriesId: string) => Promise<SceneRow[]>
+    getByProject: (projectId: string) => Promise<SceneRow[]>
     insert: (scene: SceneRow) => Promise<void>
     update: (scene: SceneRow) => Promise<void>
     delete: (id: string) => Promise<void>
-    replaceBySeries: (payload: { seriesId: string; scenes: SceneRow[] }) => Promise<void>
+    replaceByProject: (payload: { projectId: string; scenes: SceneRow[] }) => Promise<void>
   }
   shotsAPI: {
     getAll: () => Promise<ShotRow[]>
