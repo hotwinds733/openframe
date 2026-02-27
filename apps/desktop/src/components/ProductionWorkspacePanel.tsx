@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, Send, Scissors, Sparkles, Trash2, RotateCcw, Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import ReactPlayer from 'react-player'
 
 type ChatMessage = {
   id: string
@@ -670,10 +671,13 @@ export function ProductionWorkspacePanel({
               <div className="p-2">
                 <div className="aspect-video w-full rounded-md overflow-hidden bg-black flex items-center justify-center">
                   {masterVideoSrc ? (
-                    <video
+                    <ReactPlayer
                       ref={videoRef}
                       src={masterVideoSrc}
+                      width="100%"
+                      height="100%"
                       className="h-full w-full object-contain"
+                      preload="metadata"
                       onTimeUpdate={handleVideoTimeUpdate}
                       onLoadedMetadata={handleVideoLoadedMetadata}
                       onSeeked={handleVideoTimeUpdate}

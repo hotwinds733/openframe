@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Clapperboard, Film, Sparkles } from 'lucide-react'
+import ReactPlayer from 'react-player'
 import type { ShotCard } from './ShotPanel'
 
 type SceneOption = { id: string; title: string }
@@ -196,7 +197,14 @@ export function VideoPanel({
         <div className="min-h-0 rounded-lg border border-base-300 bg-base-200/70 flex items-center justify-center p-2 overflow-hidden">
           <div className={`h-auto max-h-full max-w-full w-full overflow-hidden rounded-md bg-black ${videoViewportClass}`}>
             {getThumbSrc(pair.video) ? (
-              <video src={getThumbSrc(pair.video)!} controls className="h-full w-full object-contain" />
+              <ReactPlayer
+                src={getThumbSrc(pair.video)!}
+                width="100%"
+                height="100%"
+                controls
+                preload="metadata"
+                className="h-full w-full object-contain"
+              />
             ) : (
               <div className="h-full w-full flex items-center justify-center text-xs text-base-content/60 px-4 text-center bg-base-200">
                 {t('projectLibrary.productionVideoPlaceholder')}
