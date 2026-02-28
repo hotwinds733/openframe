@@ -266,6 +266,36 @@ export function useShotProductionStudioLogic(params: Params) {
     void refreshShotsBySeries()
   }, [refreshShotsBySeries])
 
+  const productionFirstFramePromptByShotId = useMemo(() => {
+    const next: Record<string, string> = {}
+    for (const shot of seriesShots) {
+      if (shot.production_first_frame_prompt_override?.trim()) {
+        next[shot.id] = shot.production_first_frame_prompt_override
+      }
+    }
+    return next
+  }, [seriesShots])
+
+  const productionLastFramePromptByShotId = useMemo(() => {
+    const next: Record<string, string> = {}
+    for (const shot of seriesShots) {
+      if (shot.production_last_frame_prompt_override?.trim()) {
+        next[shot.id] = shot.production_last_frame_prompt_override
+      }
+    }
+    return next
+  }, [seriesShots])
+
+  const productionVideoPromptByShotId = useMemo(() => {
+    const next: Record<string, string> = {}
+    for (const shot of seriesShots) {
+      if (shot.production_video_prompt_override?.trim()) {
+        next[shot.id] = shot.production_video_prompt_override
+      }
+    }
+    return next
+  }, [seriesShots])
+
   const productionTimelineClips = useMemo(
     () => seriesShots
       .slice()
@@ -328,6 +358,9 @@ export function useShotProductionStudioLogic(params: Params) {
           production_first_frame: null,
           production_last_frame: null,
           production_video: null,
+          production_first_frame_prompt_override: null,
+          production_last_frame_prompt_override: null,
+          production_video_prompt_override: null,
           created_at: Date.now(),
         },
       ])
@@ -433,6 +466,9 @@ export function useShotProductionStudioLogic(params: Params) {
           production_first_frame: null,
           production_last_frame: null,
           production_video: null,
+          production_first_frame_prompt_override: null,
+          production_last_frame_prompt_override: null,
+          production_video_prompt_override: null,
           created_at: Date.now() + index,
         }))
 
@@ -703,7 +739,12 @@ export function useShotProductionStudioLogic(params: Params) {
         return
       }
 
-      const prompt = renderPromptTemplate(promptOverrides.productionFrame, {
+      const framePromptTemplate = (
+        kind === 'first'
+          ? activeShot.production_first_frame_prompt_override
+          : activeShot.production_last_frame_prompt_override
+      )?.trim() || promptOverrides.productionFrame
+      const prompt = renderPromptTemplate(framePromptTemplate, {
         frameKind: kind === 'first' ? 'starting' : 'ending',
         direction: kind === 'first' ? 'preceding' : 'following',
         projectCategory: projectCategory || 'unknown',
@@ -848,7 +889,8 @@ export function useShotProductionStudioLogic(params: Params) {
         if (pref) referenceImages.push(pref)
       }
 
-      const prompt = renderPromptTemplate(promptOverrides.productionVideo, {
+      const videoPromptTemplate = (shot.production_video_prompt_override || '').trim() || promptOverrides.productionVideo
+      const prompt = renderPromptTemplate(videoPromptTemplate, {
         modeHint: opts.mode === 'single'
           ? 'Generate a short coherent clip using the single reference frame as key visual anchor.'
           : 'Generate a short coherent clip transitioning from first frame to last frame with continuity.',
@@ -915,6 +957,29 @@ export function useShotProductionStudioLogic(params: Params) {
     enqueueTask(taskTitle, async () => {
       await generateProductionVideo(shotId, opts)
     }, 'media')
+  }
+
+  async function updateShotPromptOverride(
+    shotId: string,
+    field: 'production_first_frame_prompt_override' | 'production_last_frame_prompt_override' | 'production_video_prompt_override',
+    value: string,
+  ) {
+    const shot = seriesShots.find((item) => item.id === shotId)
+    if (!shot) return
+    const normalizedValue = value.trim() ? value : null
+    const updatedShot: ShotCard = {
+      ...shot,
+      [field]: normalizedValue,
+    }
+
+    setSeriesShots((prev) => prev.map((item) => (item.id === shotId ? updatedShot : item)))
+
+    try {
+      await window.shotsAPI.update(updatedShot)
+    } catch {
+      setShotError(t('projectLibrary.saveError'))
+      await refreshShotsBySeries()
+    }
   }
 
   function buildProductionVideoClips(includeTrim = true) {
@@ -1194,6 +1259,20 @@ export function useShotProductionStudioLogic(params: Params) {
     selectedVideoModelKey,
     onVideoModelChange,
     framesByShot: productionFrames,
+    defaultFramePromptTemplate: promptOverrides.productionFrame,
+    defaultVideoPromptTemplate: promptOverrides.productionVideo,
+    firstFramePromptByShotId: productionFirstFramePromptByShotId,
+    lastFramePromptByShotId: productionLastFramePromptByShotId,
+    videoPromptByShotId: productionVideoPromptByShotId,
+    onFirstFramePromptChange: (shotId: string, value: string) => {
+      void updateShotPromptOverride(shotId, 'production_first_frame_prompt_override', value)
+    },
+    onLastFramePromptChange: (shotId: string, value: string) => {
+      void updateShotPromptOverride(shotId, 'production_last_frame_prompt_override', value)
+    },
+    onVideoPromptChange: (shotId: string, value: string) => {
+      void updateShotPromptOverride(shotId, 'production_video_prompt_override', value)
+    },
     frameBusyKey: productionFrameBusyKey,
     videoBusyShotId: productionVideoBusyShotId,
     exportingMergedVideo,

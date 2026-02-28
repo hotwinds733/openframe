@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Clapperboard, Film, Sparkles } from 'lucide-react'
+import { Clapperboard, Film, Sparkles, X } from 'lucide-react'
 import ReactPlayer from 'react-player'
 import type { ShotCard } from './ShotPanel'
 
@@ -8,6 +8,7 @@ type SceneOption = { id: string; title: string }
 type CharacterOption = { id: string; name: string }
 type FramePair = { first: string | null; last: string | null; video: string | null }
 type VideoFrameMode = 'single' | 'first_last'
+type FramePromptKind = 'first' | 'last'
 
 interface VideoPanelProps {
   shots: ShotCard[]
@@ -18,6 +19,14 @@ interface VideoPanelProps {
   selectedVideoModelKey: string
   onVideoModelChange: (value: string) => void
   framesByShot: Record<string, FramePair>
+  defaultFramePromptTemplate: string
+  defaultVideoPromptTemplate: string
+  firstFramePromptByShotId: Record<string, string>
+  lastFramePromptByShotId: Record<string, string>
+  videoPromptByShotId: Record<string, string>
+  onFirstFramePromptChange: (shotId: string, value: string) => void
+  onLastFramePromptChange: (shotId: string, value: string) => void
+  onVideoPromptChange: (shotId: string, value: string) => void
   frameBusyKey: string | null
   videoBusyShotId: string | null
   exportingMergedVideo: boolean
@@ -46,6 +55,14 @@ export function VideoPanel({
   selectedVideoModelKey,
   onVideoModelChange,
   framesByShot,
+  defaultFramePromptTemplate,
+  defaultVideoPromptTemplate,
+  firstFramePromptByShotId,
+  lastFramePromptByShotId,
+  videoPromptByShotId,
+  onFirstFramePromptChange,
+  onLastFramePromptChange,
+  onVideoPromptChange,
   frameBusyKey,
   videoBusyShotId,
   exportingMergedVideo,
@@ -62,6 +79,9 @@ export function VideoPanel({
   const [selectedShotId, setSelectedShotId] = useState<string>('')
   const [durationSec, setDurationSec] = useState(4)
   const [frameMode, setFrameMode] = useState<VideoFrameMode>('first_last')
+  const [framePromptEditorOpen, setFramePromptEditorOpen] = useState(false)
+  const [framePromptEditorKind, setFramePromptEditorKind] = useState<FramePromptKind>('first')
+  const [framePromptDraft, setFramePromptDraft] = useState('')
 
   useEffect(() => {
     if (!shots.length) {
@@ -85,6 +105,15 @@ export function VideoPanel({
     const map = new Map(characters.map((item) => [item.id, item.name]))
     return selectedShot.character_ids.map((id) => map.get(id)).filter(Boolean) as string[]
   }, [characters, selectedShot])
+  const selectedFirstFramePrompt = selectedShot
+    ? (firstFramePromptByShotId[selectedShot.id] ?? defaultFramePromptTemplate)
+    : defaultFramePromptTemplate
+  const selectedLastFramePrompt = selectedShot
+    ? (lastFramePromptByShotId[selectedShot.id] ?? defaultFramePromptTemplate)
+    : defaultFramePromptTemplate
+  const selectedVideoPrompt = selectedShot
+    ? (videoPromptByShotId[selectedShot.id] ?? defaultVideoPromptTemplate)
+    : defaultVideoPromptTemplate
 
   const pair = selectedShot ? framesByShot[selectedShot.id] ?? { first: null, last: null, video: null } : { first: null, last: null, video: null }
   const mediaAspectClass = projectRatio === '9:16'
@@ -92,11 +121,28 @@ export function VideoPanel({
     : 'aspect-video'
   const useHorizontalFrameLayout = frameMode === 'first_last' && projectRatio === '9:16'
   const frameListClass = useHorizontalFrameLayout
-    ? 'flex gap-3 overflow-x-auto overflow-y-hidden pr-1 min-h-0'
+    ? 'flex gap-3 overflow-x-auto overflow-y-hidden pr-1 min-h-0 justify-between'
     : 'grid grid-cols-1 gap-3 overflow-auto pr-1 min-h-0'
   const frameCardClass = useHorizontalFrameLayout
     ? 'shrink-0 w-44 rounded-lg border border-base-300 overflow-hidden'
     : 'rounded-lg border border-base-300 overflow-hidden'
+
+  function handleOpenFramePromptEditor(kind: FramePromptKind) {
+    if (!selectedShot) return
+    setFramePromptEditorKind(kind)
+    setFramePromptDraft(kind === 'first' ? selectedFirstFramePrompt : selectedLastFramePrompt)
+    setFramePromptEditorOpen(true)
+  }
+
+  function handleSaveFramePromptEditor() {
+    if (!selectedShot) return
+    if (framePromptEditorKind === 'first') {
+      onFirstFramePromptChange(selectedShot.id, framePromptDraft)
+    } else {
+      onLastFramePromptChange(selectedShot.id, framePromptDraft)
+    }
+    setFramePromptEditorOpen(false)
+  }
 
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-2xl border border-base-300 bg-base-100 p-4 md:p-5 grid grid-cols-1 lg:grid-cols-[0.8fr_1.2fr_1.4fr_1fr] gap-3">
@@ -197,6 +243,30 @@ export function VideoPanel({
             </div>
           ) : null}
         </div>
+
+        <div className="rounded-lg border border-base-300 bg-base-100 p-2 shrink-0">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="btn btn-xs btn-outline"
+              disabled={!selectedShot}
+              onClick={() => handleOpenFramePromptEditor('first')}
+            >
+              {t('projectLibrary.productionFirstFramePromptEdit')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-outline"
+              disabled={!selectedShot}
+              onClick={() => handleOpenFramePromptEditor('last')}
+            >
+              {t('projectLibrary.productionLastFramePromptEdit')}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-base-content/55">
+            {t('projectLibrary.productionPromptCurrentShotHint')}
+          </p>
+        </div>
       </article>
 
       <article className="rounded-xl border border-base-300 bg-base-100 p-3 flex flex-col gap-3 min-h-0">
@@ -263,6 +333,20 @@ export function VideoPanel({
           </select>
         </label>
 
+        <label className="form-control flex flex-col items-start gap-1">
+          <span className="text-xs text-base-content/70">{t('projectLibrary.productionVideoPromptLabel')}</span>
+          <textarea
+            className="textarea textarea-bordered w-full min-h-20"
+            value={selectedVideoPrompt}
+            onChange={(e) => {
+              if (!selectedShot) return
+              onVideoPromptChange(selectedShot.id, e.target.value)
+            }}
+            disabled={!selectedShot}
+            placeholder={t('projectLibrary.productionVideoPromptPlaceholder')}
+          />
+        </label>
+
         <div className="mt-2 border-t border-base-300 pt-3">
           <div className="join join-vertical w-full gap-2 flex flex-col">
             <button
@@ -304,6 +388,45 @@ export function VideoPanel({
           </div>
         </div>
       </article>
+
+      {framePromptEditorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-base-content/45"
+            aria-label={t('projectLibrary.close')}
+            onClick={() => setFramePromptEditorOpen(false)}
+          />
+          <article className="relative z-10 w-full max-w-3xl rounded-xl border border-base-300 bg-base-100 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-base-300">
+              <p className="text-sm font-semibold">
+                {framePromptEditorKind === 'first'
+                  ? t('projectLibrary.productionFirstFramePromptEditTitle')
+                  : t('projectLibrary.productionLastFramePromptEditTitle')}
+              </p>
+              <button type="button" className="btn btn-sm btn-ghost btn-circle" onClick={() => setFramePromptEditorOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4">
+              <textarea
+                className="textarea textarea-bordered w-full min-h-64"
+                value={framePromptDraft}
+                onChange={(e) => setFramePromptDraft(e.target.value)}
+                placeholder={t('projectLibrary.productionFramePromptPlaceholder')}
+              />
+            </div>
+            <div className="px-4 py-3 border-t border-base-300 flex items-center justify-end gap-2">
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFramePromptEditorOpen(false)}>
+                {t('projectLibrary.productionPromptCancel')}
+              </button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveFramePromptEditor}>
+                {t('projectLibrary.productionPromptSave')}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -75,6 +75,15 @@ function ensureShotsProductionColumns(raw: InstanceType<typeof Database>): void 
   if (!names.has('production_video')) {
     raw.exec('ALTER TABLE shots ADD COLUMN production_video text')
   }
+  if (!names.has('production_first_frame_prompt_override')) {
+    raw.exec('ALTER TABLE shots ADD COLUMN production_first_frame_prompt_override text')
+  }
+  if (!names.has('production_last_frame_prompt_override')) {
+    raw.exec('ALTER TABLE shots ADD COLUMN production_last_frame_prompt_override text')
+  }
+  if (!names.has('production_video_prompt_override')) {
+    raw.exec('ALTER TABLE shots ADD COLUMN production_video_prompt_override text')
+  }
 }
 
 function ensureShotsPropIdsColumn(raw: InstanceType<typeof Database>): void {

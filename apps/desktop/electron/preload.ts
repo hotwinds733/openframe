@@ -124,6 +124,9 @@ type ShotRow = {
   production_first_frame: string | null
   production_last_frame: string | null
   production_video: string | null
+  production_first_frame_prompt_override: string | null
+  production_last_frame_prompt_override: string | null
+  production_video_prompt_override: string | null
   created_at: number
 }
 

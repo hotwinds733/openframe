@@ -103,6 +103,9 @@ export const shots = sqliteTable('shots', {
   production_first_frame: text('production_first_frame'),
   production_last_frame: text('production_last_frame'),
   production_video: text('production_video'),
+  production_first_frame_prompt_override: text('production_first_frame_prompt_override'),
+  production_last_frame_prompt_override: text('production_last_frame_prompt_override'),
+  production_video_prompt_override: text('production_video_prompt_override'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 })
 
