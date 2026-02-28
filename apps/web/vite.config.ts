@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import aiProxyHandler from './api/ai'
 
 type DevProxyResponse = {
@@ -69,7 +70,15 @@ function createWebApiPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [tailwindcss(), react(), createWebApiPlugin()],
+  plugins: [
+    TanStackRouterVite({
+      routesDirectory: '../ui/src/routes',
+      generatedRouteTree: '../ui/src/routeTree.gen.ts',
+    }),
+    tailwindcss(),
+    react(),
+    createWebApiPlugin(),
+  ],
   server: {
     port: 5170,
     strictPort: true,
