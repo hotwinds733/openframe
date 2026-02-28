@@ -87,9 +87,16 @@ export function VideoPanel({
   }, [characters, selectedShot])
 
   const pair = selectedShot ? framesByShot[selectedShot.id] ?? { first: null, last: null, video: null } : { first: null, last: null, video: null }
-  const videoViewportClass = projectRatio === '9:16'
+  const mediaAspectClass = projectRatio === '9:16'
     ? 'aspect-[9/16]'
     : 'aspect-video'
+  const useHorizontalFrameLayout = frameMode === 'first_last' && projectRatio === '9:16'
+  const frameListClass = useHorizontalFrameLayout
+    ? 'flex gap-3 overflow-x-auto overflow-y-hidden pr-1 min-h-0'
+    : 'grid grid-cols-1 gap-3 overflow-auto pr-1 min-h-0'
+  const frameCardClass = useHorizontalFrameLayout
+    ? 'shrink-0 w-44 rounded-lg border border-base-300 overflow-hidden'
+    : 'rounded-lg border border-base-300 overflow-hidden'
 
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-2xl border border-base-300 bg-base-100 p-4 md:p-5 grid grid-cols-1 lg:grid-cols-[0.8fr_1.2fr_1.4fr_1fr] gap-3">
@@ -149,11 +156,11 @@ export function VideoPanel({
             </button>
           </div>
         ) : null}
-        <div className="grid grid-cols-1 gap-3 overflow-auto pr-1 min-h-0">
+        <div className={frameListClass}>
           {frameMode === 'first_last' ? (
-            <div className="rounded-lg border border-base-300 overflow-hidden">
+            <div className={frameCardClass}>
               <div className="px-2 py-1 text-xs border-b border-base-300">{t('projectLibrary.productionFirstFrame')}</div>
-              <div className="aspect-video bg-base-200 flex items-center justify-center">
+              <div className={`${mediaAspectClass} bg-base-200 flex items-center justify-center`}>
                 {getThumbSrc(pair.first) ? (
                   <img src={getThumbSrc(pair.first)!} className="w-full h-full object-cover" />
                 ) : <Clapperboard size={20} className="text-base-content/60" />}
@@ -165,9 +172,9 @@ export function VideoPanel({
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-base-300 overflow-hidden">
+          <div className={frameCardClass}>
             <div className="px-2 py-1 text-xs border-b border-base-300">{t('projectLibrary.productionMiddleFrame')}</div>
-            <div className="aspect-video bg-base-200 flex items-center justify-center">
+            <div className={`${mediaAspectClass} bg-base-200 flex items-center justify-center`}>
               {getThumbSrc(selectedShot?.thumbnail || null) ? (
                 <img src={getThumbSrc(selectedShot?.thumbnail || null)!} className="w-full h-full object-cover" />
               ) : <Clapperboard size={20} className="text-base-content/60" />}
@@ -176,9 +183,9 @@ export function VideoPanel({
           </div>
 
           {frameMode === 'first_last' ? (
-            <div className="rounded-lg border border-base-300 overflow-hidden">
+            <div className={frameCardClass}>
               <div className="px-2 py-1 text-xs border-b border-base-300">{t('projectLibrary.productionLastFrame')}</div>
-              <div className="aspect-video bg-base-200 flex items-center justify-center">
+              <div className={`${mediaAspectClass} bg-base-200 flex items-center justify-center`}>
                 {getThumbSrc(pair.last) ? (
                   <img src={getThumbSrc(pair.last)!} className="w-full h-full object-cover" />
                 ) : <Clapperboard size={20} className="text-base-content/60" />}
@@ -195,7 +202,7 @@ export function VideoPanel({
       <article className="rounded-xl border border-base-300 bg-base-100 p-3 flex flex-col gap-3 min-h-0">
         <h3 className="text-sm font-semibold">{t('projectLibrary.productionVideoWindow')}</h3>
         <div className="min-h-0 rounded-lg border border-base-300 bg-base-200/70 flex items-center justify-center p-2 overflow-hidden">
-          <div className={`h-auto max-h-full max-w-full w-full overflow-hidden rounded-md bg-black ${videoViewportClass}`}>
+          <div className={`h-auto max-h-full max-w-full w-full overflow-hidden rounded-md bg-black ${mediaAspectClass}`}>
             {getThumbSrc(pair.video) ? (
               <ReactPlayer
                 src={getThumbSrc(pair.video)!}

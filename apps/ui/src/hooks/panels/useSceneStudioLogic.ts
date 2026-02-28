@@ -56,6 +56,30 @@ function extFromMediaType(mediaType: string | undefined): string {
   }
 }
 
+function isAnimeStyle(style: string): boolean {
+  return /(动漫|二次元|anime|manga|cartoon|toon|cel[-\s]?shad)/i.test(style)
+}
+
+function buildSceneStyleSuffix(style: string): string {
+  const lines = [
+    'Hard requirements:',
+    '- Strictly follow the provided "Project style" in composition language, line quality, color script, and rendering mood.',
+    '- This is an environment concept scene image, not a portrait shot. Prioritize space design, depth, and staging.',
+    '- Output ONE 16:9 scene sheet with exactly three views of the SAME environment: main wide view, side-angle view, and reverse-angle view.',
+    '- Environment only: no humans, no characters, no body parts, no crowds, and no character silhouettes.',
+    '- Keep architecture, props, and lighting continuity consistent across all three views.',
+    '- Keep output clean: no UI text overlays, no subtitles, no logos.',
+  ]
+
+  if (isAnimeStyle(style)) {
+    lines.push('- Anime background illustration style only. Avoid photorealistic lens effect, photographic texture, and live-action look.')
+  } else {
+    lines.push('- Do not shift to photorealistic style unless the project style explicitly requests realism.')
+  }
+
+  return lines.join('\n')
+}
+
 function normalizeSceneTitle(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -437,11 +461,12 @@ export function useSceneStudioLogic(params: Params) {
         time: scene.time || 'unknown',
         mood: scene.mood || 'unknown',
       })
+      const finalPrompt = `${prompt}\n\n${buildSceneStyleSuffix(projectGenre || 'unknown')}`
 
       const result = await window.aiAPI.generateImage({
-        prompt,
+        prompt: finalPrompt,
         modelKey: selectedImageModelKey || undefined,
-        options: { ratio: projectRatio },
+        options: { ratio: '16:9' },
       })
       if (!result.ok) {
         setSceneError(result.error)

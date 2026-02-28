@@ -35,6 +35,7 @@ interface ShotPanelProps {
   scenes: SceneOption[]
   characters: CharacterOption[]
   props: PropOption[]
+  projectRatio?: '16:9' | '9:16'
   generatingFromScript: boolean
   generatingAllImages: boolean
   generatingShotId: string | null
@@ -70,6 +71,7 @@ export function ShotPanel({
   scenes,
   characters,
   props,
+  projectRatio = '16:9',
   generatingFromScript,
   generatingAllImages,
   generatingShotId,
@@ -81,6 +83,7 @@ export function ShotPanel({
   onGenerateSingleImage,
 }: ShotPanelProps) {
   const { t } = useTranslation()
+  const mediaAspectClass = projectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'
   const [editingId, setEditingId] = useState<string | null>(null)
   const [previewShotId, setPreviewShotId] = useState<string | null>(null)
   const [targetShotCountInput, setTargetShotCountInput] = useState('20')
@@ -220,7 +223,7 @@ export function ShotPanel({
             <article key={shot.id} className="w-full rounded-xl border border-base-300 bg-base-100 overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(shot)}>
               <button
                 type="button"
-                className="aspect-video border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-center justify-center w-full"
+                className={`${mediaAspectClass} border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-center justify-center w-full`}
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()

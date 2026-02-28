@@ -56,7 +56,6 @@ function getThumbnailSrc(value: string | null): string | null {
 
 export function ScenePanel({
   scenes,
-  projectRatio = '16:9',
   extractingFromScript,
   extractingRegenerate,
   sceneBusyId,
@@ -75,9 +74,9 @@ export function ScenePanel({
   generatingAllImages,
 }: ScenePanelProps) {
   const { t } = useTranslation()
-  const cardWidthClass = projectRatio === '9:16' ? 'w-48' : 'w-56'
-  const cardHeightClass = projectRatio === '9:16' ? 'h-112' : 'h-105'
-  const mediaAspectClass = projectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'
+  const cardWidthClass = 'w-56'
+  const cardHeightClass = 'h-105'
+  const mediaAspectClass = 'aspect-video'
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const [previewSceneId, setPreviewSceneId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -256,12 +255,14 @@ export function ScenePanel({
                 </div>
               </button>
               <div className="p-3 flex-1 min-h-0 flex flex-col">
-                <p className="text-base font-semibold line-clamp-1">{scene.title || t('projectLibrary.sceneCardUntitled')}</p>
-                <div className="mt-2 flex gap-1 text-xs text-base-content/65"><MapPin size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-1">{[scene.location, scene.time].filter(Boolean).join(' · ') || '-'}</span></div>
-                <div className="mt-2 flex gap-1 text-xs text-base-content/65"><Sparkles size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.mood || '-'}</span></div>
-                <div className="mt-2 flex gap-1 text-xs text-base-content/65"><ScrollText size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.description || '-'}</span></div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <p className="text-base font-semibold line-clamp-1">{scene.title || t('projectLibrary.sceneCardUntitled')}</p>
+                  <div className="mt-2 flex gap-1 text-xs text-base-content/65"><MapPin size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-1">{[scene.location, scene.time].filter(Boolean).join(' · ') || '-'}</span></div>
+                  <div className="mt-2 flex gap-1 text-xs text-base-content/65"><Sparkles size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.mood || '-'}</span></div>
+                  <div className="mt-2 flex gap-1 text-xs text-base-content/65"><ScrollText size={12} className="shrink-0 mt-0.5" /><span className="line-clamp-2 wrap-break-word">{scene.description || '-'}</span></div>
+                </div>
 
-                <div className="mt-auto pt-3 border-t border-base-300 flex items-center justify-center gap-1">
+                <div className="pt-3 border-t border-base-300 flex items-center justify-center gap-1 shrink-0">
                   {showAdvancedActions ? (
                     <button type="button" className="btn btn-xs btn-outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateSceneImage(scene.id) }} disabled={sceneBusyId === scene.id || extractingFromScript || extractingRegenerate} title={t('projectLibrary.sceneGenerateImage')}><Sparkles size={12} /></button>
                   ) : null}

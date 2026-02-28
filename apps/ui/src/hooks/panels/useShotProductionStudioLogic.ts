@@ -130,6 +130,73 @@ function formatShotContextLine(
   ].join(' | ')
 }
 
+function includesAny(source: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => source.includes(keyword))
+}
+
+function buildProductionFrameMotionSuffix(cameraMove: string, kind: 'first' | 'last'): string {
+  const move = (cameraMove || '').trim().toLowerCase()
+  const lines = [
+    'Hard requirements:',
+    kind === 'first'
+      ? '- Generate the temporal START frame: it must be an earlier moment than the middle frame within the same shot movement.'
+      : '- Generate the temporal END frame: it must be a later moment than the middle frame within the same shot movement.',
+    '- Keep shot intent consistent: same subject, same scene, same lens language, and same blocking logic.',
+    '- Strictly obey camera move direction; do not reverse motion.',
+    `- Camera move to follow: ${cameraMove || 'unknown'}`,
+  ]
+
+  if (!move || includesAny(move, ['static', 'locked', 'still', 'none', '固定', '静止', '不动'])) {
+    lines.push('- For static/locked camera, keep framing almost unchanged from the middle frame (only minimal natural variation).')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['push in', 'dolly in', 'truck in', 'zoom in', '推进', '推近', '拉近', '向前'])) {
+    lines.push(kind === 'first'
+      ? '- Push-in/zoom-in: first frame should be slightly wider/farther than middle frame.'
+      : '- Push-in/zoom-in: last frame should be slightly tighter/closer than middle frame.')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['pull out', 'dolly out', 'truck out', 'zoom out', '拉远', '拉出', '后退', '远离'])) {
+    lines.push(kind === 'first'
+      ? '- Pull-out/zoom-out: first frame should be slightly tighter/closer than middle frame.'
+      : '- Pull-out/zoom-out: last frame should be slightly wider/farther than middle frame.')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['pan left', 'left pan', '左摇', '向左摇', '左移'])) {
+    lines.push(kind === 'first'
+      ? '- Pan-left: first frame should be before the left pan completes.'
+      : '- Pan-left: last frame should be after the camera has moved further left.')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['pan right', 'right pan', '右摇', '向右摇', '右移'])) {
+    lines.push(kind === 'first'
+      ? '- Pan-right: first frame should be before the right pan completes.'
+      : '- Pan-right: last frame should be after the camera has moved further right.')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['tilt up', 'up tilt', '仰拍', '上摇', '向上'])) {
+    lines.push(kind === 'first'
+      ? '- Tilt-up: first frame should be lower in pitch than middle frame.'
+      : '- Tilt-up: last frame should be higher in pitch than middle frame.')
+    return lines.join('\n')
+  }
+
+  if (includesAny(move, ['tilt down', 'down tilt', '俯拍', '下摇', '向下'])) {
+    lines.push(kind === 'first'
+      ? '- Tilt-down: first frame should be higher in pitch than middle frame.'
+      : '- Tilt-down: last frame should be lower in pitch than middle frame.')
+    return lines.join('\n')
+  }
+
+  lines.push('- Show a clear temporal before/after phase relative to middle frame while preserving shot continuity.')
+  return lines.join('\n')
+}
+
 export function useShotProductionStudioLogic(params: Params) {
   const {
     t,
@@ -595,36 +662,11 @@ export function useShotProductionStudioLogic(params: Params) {
     const activeShot = shotOrderIndex >= 0 ? orderedShots[shotOrderIndex] : null
     if (!activeShot) return
     const previousShot = shotOrderIndex > 0 ? orderedShots[shotOrderIndex - 1] : undefined
-    const nextShot = shotOrderIndex >= 0 && shotOrderIndex + 1 < orderedShots.length
-      ? orderedShots[shotOrderIndex + 1]
-      : undefined
 
     const busyKey = `${shotId}:${kind}`
     setProductionFrameBusyKey(busyKey)
     setShotError('')
     try {
-      if (kind === 'first' && previousShot?.production_last_frame) {
-        const linkedFirstFrame = previousShot.production_last_frame
-        const updatedShot: ShotCard = {
-          ...activeShot,
-          production_first_frame: linkedFirstFrame,
-          production_last_frame: activeShot.production_last_frame ?? null,
-        }
-        await window.shotsAPI.update(updatedShot)
-        setSeriesShots((prev) => prev.map((item) => (item.id === shotId
-          ? { ...item, production_first_frame: linkedFirstFrame }
-          : item)))
-        setProductionFrames((prev) => ({
-          ...prev,
-          [shotId]: {
-            first: linkedFirstFrame,
-            last: prev[shotId]?.last ?? activeShot.production_last_frame ?? null,
-            video: prev[shotId]?.video ?? activeShot.production_video ?? null,
-          },
-        }))
-        return
-      }
-
       const sceneMap = new Map(currentSeriesScenes.map((scene) => [scene.id, scene]))
       const characterMap = new Map(projectCharacters.map((character) => [character.id, character]))
       const propMap = new Map(projectProps.map((prop) => [prop.id, prop]))
@@ -651,6 +693,10 @@ export function useShotProductionStudioLogic(params: Params) {
         const pref = await readThumbnailAsBase64(propMap.get(pid)?.thumbnail ?? null)
         if (pref) referenceImages.push(pref)
       }
+      if (kind === 'first' && previousShot?.production_last_frame) {
+        const previousLastRef = await readThumbnailAsBase64(previousShot.production_last_frame)
+        if (previousLastRef) referenceImages.push(previousLastRef)
+      }
 
       if (!middleRef) {
         setShotError(t('projectLibrary.productionNeedMiddleFrame'))
@@ -674,9 +720,10 @@ export function useShotProductionStudioLogic(params: Params) {
         characters: characterNames || 'none',
         props: propNames || 'none',
       })
+      const finalPrompt = `${prompt}\n\n${buildProductionFrameMotionSuffix(activeShot.camera_move || 'unknown', kind)}`
 
       const result = await window.aiAPI.generateImage({
-        prompt: referenceImages.length > 0 ? { text: prompt, images: referenceImages } : prompt,
+        prompt: referenceImages.length > 0 ? { text: finalPrompt, images: referenceImages } : finalPrompt,
         modelKey: selectedImageModelKey || undefined,
         options: { ratio: projectRatio },
       })
@@ -718,26 +765,6 @@ export function useShotProductionStudioLogic(params: Params) {
           video: prev[shotId]?.video ?? null,
         },
       }))
-
-      if (kind === 'last' && nextShot) {
-        const linkedNextShot: ShotCard = {
-          ...nextShot,
-          production_first_frame: savedPath,
-          production_last_frame: nextShot.production_last_frame ?? null,
-        }
-        await window.shotsAPI.update(linkedNextShot)
-        setSeriesShots((prev) => prev.map((item) => (item.id === nextShot.id
-          ? { ...item, production_first_frame: savedPath }
-          : item)))
-        setProductionFrames((prev) => ({
-          ...prev,
-          [nextShot.id]: {
-            first: savedPath,
-            last: prev[nextShot.id]?.last ?? nextShot.production_last_frame ?? null,
-            video: prev[nextShot.id]?.video ?? nextShot.production_video ?? null,
-          },
-        }))
-      }
     } catch {
       setShotError(t('projectLibrary.aiToolkitFailed'))
     } finally {
@@ -1140,6 +1167,7 @@ export function useShotProductionStudioLogic(params: Params) {
     scenes: shotSceneOptions,
     characters: shotCharacterOptions,
     props: shotPropOptions,
+    projectRatio,
     generatingFromScript: generatingShotsFromScript,
     generatingAllImages: generatingShotImages,
     generatingShotId,
