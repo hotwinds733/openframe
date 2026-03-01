@@ -623,6 +623,7 @@ function ProviderDetail({
     .filter((model) => model.type !== 'embedding')
   const enabledTestModels = getEnabledProviderModels(provider.id, config)
     .filter((model) => model.type !== 'embedding')
+  const hasEnabledTestModels = enabledTestModels.length > 0
   const modelsByType = MODEL_TYPE_SECTIONS.map(({ type, labelKey }) => ({
     type,
     labelKey,
@@ -672,6 +673,11 @@ function ProviderDetail({
   }
 
   async function handleTestConnection() {
+    if (!hasEnabledTestModels) {
+      setTestState('error')
+      setTestError(t('settings.aiTestNoTextModel'))
+      return
+    }
     const modelId = testModelId
       || enabledTestModels.find((m) => m.type === 'text')?.id
       || enabledTestModels[0]?.id
@@ -909,7 +915,7 @@ function ProviderDetail({
               value={testModelId}
               onChange={(e) => { setTestModelId(e.target.value); setTestState('idle') }}
             >
-              <option value="">{t('settings.aiTestAutoModel')}</option>
+              <option value="">{hasEnabledTestModels ? t('settings.aiTestAutoModel') : t('settings.aiTestNoTextModel')}</option>
               {enabledTestModels.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}

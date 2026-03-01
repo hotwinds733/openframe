@@ -456,7 +456,7 @@ export default {
     aiBaseUrl: 'Base URL',
     aiTestConnection: '测试连接',
     aiTestSuccess: '连接成功',
-    aiTestNoTextModel: '没有可用的模型',
+    aiTestNoTextModel: '请先至少启用一个模型后再测试',
     aiTestAutoModel: '自动（第一个可用）',
     aiAvailableModels: '可用模型',
     aiAddModel: '添加模型',

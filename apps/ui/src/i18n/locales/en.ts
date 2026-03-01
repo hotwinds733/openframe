@@ -456,7 +456,7 @@ export default {
     aiBaseUrl: 'Base URL',
     aiTestConnection: 'Test Connection',
     aiTestSuccess: 'Connection successful',
-    aiTestNoTextModel: 'No models available to test',
+    aiTestNoTextModel: 'Enable at least one model before testing',
     aiTestAutoModel: 'Auto (first available)',
     aiAvailableModels: 'Available Models',
     aiAddModel: 'Add Model',
