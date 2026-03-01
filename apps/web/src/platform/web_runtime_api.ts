@@ -1,5 +1,10 @@
 import type { AIConfig } from '@openframe/providers'
 import { DEFAULT_AI_CONFIG } from '@openframe/providers'
+import {
+  isObjectStorageEnabled,
+  parseObjectStorageConfig,
+  type ObjectStorageConfig,
+} from '@openframe/shared/object-storage-config'
 import { ensureProxyFetchInstalled } from './web_runtime_fetch_proxy'
 import { createWebAiApi } from './web_runtime_ai'
 
@@ -111,6 +116,7 @@ const SETTINGS_KEYS = [
   'onboarding_seen',
   'onboarding_version',
   'prompt_overrides',
+  'storage_config',
 ] as const
 
 type AllowedSettingKey = (typeof SETTINGS_KEYS)[number]
@@ -844,6 +850,43 @@ async function toDataUrl(bytes: Uint8Array, mimeType: string): Promise<string> {
   return blobToDataUrl(blob)
 }
 
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
+
+async function uploadMediaToObjectStorage(args: {
+  data: Uint8Array
+  ext: string
+  folder?: 'thumbnails' | 'videos'
+  config: ObjectStorageConfig
+}): Promise<string> {
+  const response = await fetch('/api/storage', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      config: args.config,
+      ext: args.ext,
+      folder: args.folder === 'videos' ? 'videos' : 'thumbnails',
+      dataBase64: uint8ToBase64(args.data),
+    }),
+  })
+
+  const payload = await response.json() as { ok: boolean; url?: string; error?: string }
+  if (!response.ok || !payload.ok || !payload.url) {
+    throw new Error(payload.error || `Storage upload failed (${response.status})`)
+  }
+
+  return payload.url
+}
+
 async function readMediaAsDataUrl(path: string): Promise<string | null> {
   if (!path) return null
   if (/^data:/i.test(path)) return path
@@ -1336,6 +1379,10 @@ export function ensureWebRuntimeAPIs(): void {
 
   runtimeWindow.thumbnailsAPI = {
     save: async (data: Uint8Array, ext: string, folder?: 'thumbnails' | 'videos') => {
+      const storageConfig = parseObjectStorageConfig(getStoredSetting('storage_config'))
+      if (isObjectStorageEnabled(storageConfig)) {
+        return uploadMediaToObjectStorage({ data, ext, folder, config: storageConfig })
+      }
       const mimeType = extToMimeType(ext, folder)
       return toDataUrl(data, mimeType)
     },

@@ -7,12 +7,14 @@ type AllowedSettingKey =
   | 'onboarding_seen'
   | 'onboarding_version'
   | 'prompt_overrides'
+  | 'storage_config'
 const allowedKeys: AllowedSettingKey[] = [
   'language',
   'theme',
   'onboarding_seen',
   'onboarding_version',
   'prompt_overrides',
+  'storage_config',
 ]
 
 function isAllowedSettingKey(key: string): key is AllowedSettingKey {
@@ -26,6 +28,7 @@ export function registerSettingsHandlers() {
     { key: 'onboarding_seen', value: store.get('onboarding_seen') },
     { key: 'onboarding_version', value: store.get('onboarding_version') },
     { key: 'prompt_overrides', value: store.get('prompt_overrides') },
+    { key: 'storage_config', value: store.get('storage_config') },
   ])
 
   ipcMain.handle('settings:upsert', (_event, key: string, value: string) => {

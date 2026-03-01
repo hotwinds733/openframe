@@ -72,16 +72,6 @@ function extFromMediaType(mediaType: string | undefined): string {
   }
 }
 
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize)
-    binary += String.fromCharCode(...chunk)
-  }
-  return btoa(binary)
-}
-
 function parseJsonObject(text: string): Record<string, unknown> | null {
   const trimmed = text.trim()
   if (!trimmed) return null
@@ -332,10 +322,6 @@ export function useShotProductionStudioLogic(params: Params) {
     if (!value) return null
     if (/^data:/i.test(value)) return value
 
-    if (!/^(https?:|blob:|openframe-thumb:)/i.test(value)) {
-      return window.thumbnailsAPI.readBase64(value)
-    }
-
     if (/^openframe-thumb:/i.test(value)) {
       try {
         const parsed = new URL(value)
@@ -347,17 +333,7 @@ export function useShotProductionStudioLogic(params: Params) {
       }
     }
 
-    try {
-      const res = await fetch(value)
-      if (!res.ok) return null
-      const bytes = new Uint8Array(await res.arrayBuffer())
-      if (bytes.length === 0) return null
-      const mediaType = res.headers.get('content-type') || 'image/png'
-      const base64 = uint8ToBase64(bytes)
-      return `data:${mediaType};base64,${base64}`
-    } catch {
-      return null
-    }
+    return window.thumbnailsAPI.readBase64(value)
   }
 
   async function addShot(draft: ShotDraft) {

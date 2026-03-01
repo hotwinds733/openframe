@@ -9,6 +9,12 @@ import { GeneralSettingsPanel, type Theme } from './settings/GeneralSettingsPane
 import { AISettingsPanel, MediaConcurrencyPanel } from './settings/AISettingsPanel'
 import { DataSettingsPanel } from './settings/DataSettingsPanel'
 import { normalizeLanguage, type UILanguage } from '../utils/language'
+import {
+  DEFAULT_OBJECT_STORAGE_CONFIG,
+  parseObjectStorageConfigFromSetting,
+  stringifyObjectStorageConfigForSetting,
+  type ObjectStorageConfig,
+} from '../utils/storage_config'
 
 type Category = 'general' | 'provider' | 'concurrency' | 'data'
 
@@ -41,6 +47,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [pendingLang,  setPendingLang]  = useState<UILanguage>(fallbackLanguage)
   const [pendingTheme, setPendingTheme] = useState<Theme>('system')
   const [pendingAI,    setPendingAI]    = useState<AIConfig>(DEFAULT_AI_CONFIG)
+  const [pendingStorage, setPendingStorage] = useState<ObjectStorageConfig>(DEFAULT_OBJECT_STORAGE_CONFIG)
 
   const { data: settingsList } = useLiveQuery(settingsCollection)
 
@@ -53,8 +60,9 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (!open) return
     setPendingLang(normalizeLanguage(settingsMap.language, fallbackLanguage))
     setPendingTheme((settingsMap.theme as Theme) ?? 'system')
+    setPendingStorage(parseObjectStorageConfigFromSetting(settingsMap.storage_config))
     window.aiAPI.getConfig().then((cfg) => setPendingAI((cfg as AIConfig) ?? DEFAULT_AI_CONFIG))
-  }, [open, settingsMap.language, fallbackLanguage])
+  }, [open, settingsMap.language, settingsMap.theme, settingsMap.storage_config, fallbackLanguage])
 
   function upsertSetting(key: string, value: string) {
     if (settingsList?.some((s) => s.id === key)) {
@@ -69,6 +77,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     i18n.changeLanguage(nextLang)
     upsertSetting('theme', pendingTheme)
     upsertSetting('language', nextLang)
+    upsertSetting('storage_config', stringifyObjectStorageConfigForSetting(pendingStorage))
     window.aiAPI.saveConfig(pendingAI)
     applyTheme(pendingTheme)
     onClose()
@@ -77,6 +86,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   function handleCancel() {
     setPendingLang(normalizeLanguage(settingsMap.language, fallbackLanguage))
     setPendingTheme((settingsMap.theme as Theme) ?? 'system')
+    setPendingStorage(parseObjectStorageConfigFromSetting(settingsMap.storage_config))
     window.aiAPI.getConfig().then((cfg) => setPendingAI((cfg as AIConfig) ?? DEFAULT_AI_CONFIG))
     onClose()
   }
@@ -126,7 +136,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               </div>
             ) : activeCategory === 'data' ? (
               <div className="flex-1 overflow-hidden">
-                <DataSettingsPanel />
+                <DataSettingsPanel
+                  storageConfig={pendingStorage}
+                  onStorageConfigChange={setPendingStorage}
+                />
               </div>
             ) : (
               <div className="flex-1 overflow-auto px-6 py-5 flex flex-col gap-7">

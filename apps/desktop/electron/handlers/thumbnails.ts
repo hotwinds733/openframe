@@ -2,7 +2,9 @@ import { ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { createObjectStorageFactory } from '@openframe/shared/object-storage-factory'
 import { getDataDir } from '../data_dir'
+import { store } from '../store'
 
 function getThumbsDir() {
   return path.join(getDataDir(), 'thumbnails')
@@ -10,6 +12,12 @@ function getThumbsDir() {
 
 function getVideosDir() {
   return path.join(getDataDir(), 'videos')
+}
+
+function normalizeExt(ext: string, folder?: 'thumbnails' | 'videos'): string {
+  const normalized = ext.replace(/^\./, '').trim().toLowerCase()
+  if (!normalized) return folder === 'videos' ? 'mp4' : 'png'
+  return normalized
 }
 
 function contentTypeFromPath(filePath: string): string {
@@ -28,10 +36,16 @@ function contentTypeFromPath(filePath: string): string {
 }
 
 export function registerThumbnailsHandlers() {
-  ipcMain.handle('thumbnails:save', (_event, data: Uint8Array, ext: string, folder?: 'thumbnails' | 'videos') => {
+  ipcMain.handle('thumbnails:save', async (_event, data: Uint8Array, ext: string, folder?: 'thumbnails' | 'videos') => {
+    const objectStorage = createObjectStorageFactory(store.get('storage_config'))
+    const remoteUrl = await objectStorage.saveMedia({ data, ext, folder })
+    if (remoteUrl) {
+      return remoteUrl
+    }
+
     const targetDir = folder === 'videos' ? getVideosDir() : getThumbsDir()
     fs.mkdirSync(targetDir, { recursive: true })
-    const filename = `${randomUUID()}.${ext}`
+    const filename = `${randomUUID()}.${normalizeExt(ext, folder)}`
     const filepath = path.join(targetDir, filename)
     fs.writeFileSync(filepath, Buffer.from(data))
     return filepath
@@ -49,6 +63,17 @@ export function registerThumbnailsHandlers() {
 
   ipcMain.handle('thumbnails:readBase64', (_event, filepath: string) => {
     try {
+      if (/^https?:\/\//i.test(filepath)) {
+        return fetch(filepath)
+          .then(async (response) => {
+            if (!response.ok) return null
+            const bytes = Buffer.from(await response.arrayBuffer())
+            if (!bytes.length) return null
+            const mediaType = response.headers.get('content-type') || contentTypeFromPath(filepath)
+            return `data:${mediaType};base64,${bytes.toString('base64')}`
+          })
+          .catch(() => null)
+      }
       if (!filepath || (!filepath.startsWith(getThumbsDir()) && !filepath.startsWith(getVideosDir()))) return null
       const buf = fs.readFileSync(filepath)
       if (!buf.length) return null

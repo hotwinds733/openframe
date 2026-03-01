@@ -132,7 +132,6 @@ export function createWebAiApi(options: CreateWebAiApiOptions): Window['aiAPI'] 
           ok: true as const,
           data: generated.data,
           mediaType: generated.mediaType,
-          url: generated.url,
         }
       } catch (err: unknown) {
         return { ok: false as const, error: shortError(err) }
@@ -155,7 +154,6 @@ export function createWebAiApi(options: CreateWebAiApiOptions): Window['aiAPI'] 
           ok: true as const,
           data: generated.data,
           mediaType: generated.mediaType,
-          url: generated.url,
         }
       } catch (err: unknown) {
         return { ok: false as const, error: shortError(err) }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FolderOpen, FolderInput, RotateCcw, RefreshCw } from 'lucide-react'
+import type { ObjectStorageConfig, ObjectStorageProvider } from '../../utils/storage_config'
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -10,7 +11,12 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
-export function DataSettingsPanel() {
+interface DataSettingsPanelProps {
+  storageConfig: ObjectStorageConfig
+  onStorageConfigChange: (next: ObjectStorageConfig) => void
+}
+
+export function DataSettingsPanel({ storageConfig, onStorageConfigChange }: DataSettingsPanelProps) {
   const { t } = useTranslation()
   const isDesktopRuntime = useMemo(
     () => typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent),
@@ -70,6 +76,14 @@ export function DataSettingsPanel() {
   }
 
   const hasPending = info && info.pendingDir !== '' && info.pendingDir !== info.currentDir
+  const usingObjectStorage = storageConfig.provider !== 'local'
+
+  function updateStorageConfig<Key extends keyof ObjectStorageConfig>(key: Key, value: ObjectStorageConfig[Key]) {
+    onStorageConfigChange({
+      ...storageConfig,
+      [key]: value,
+    })
+  }
 
   return (
     <div className="h-full overflow-auto px-6 py-5 flex flex-col gap-6">
@@ -79,6 +93,121 @@ export function DataSettingsPanel() {
         </div>
       ) : info && (
         <>
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold">{t('settings.objectStorage')}</h4>
+              <span className="badge badge-sm badge-outline uppercase">{storageConfig.provider}</span>
+            </div>
+            <p className="text-xs text-base-content/60">{t('settings.objectStorageHint')}</p>
+
+            <label className="form-control">
+              <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageProvider')}</span>
+              <select
+                className="select select-bordered select-sm w-full mt-1"
+                value={storageConfig.provider}
+                onChange={(event) => updateStorageConfig('provider', event.target.value as ObjectStorageProvider)}
+              >
+                <option value="local">{t('settings.objectStorageProviderLocal')}</option>
+                <option value="s3">{t('settings.objectStorageProviderS3')}</option>
+                <option value="oss">{t('settings.objectStorageProviderOss')}</option>
+                <option value="cos">{t('settings.objectStorageProviderCos')}</option>
+              </select>
+            </label>
+
+            {usingObjectStorage ? (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageEndpoint')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      value={storageConfig.endpoint}
+                      onChange={(event) => updateStorageConfig('endpoint', event.target.value)}
+                      placeholder={t('settings.objectStorageEndpointPlaceholder')}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageRegion')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      value={storageConfig.region}
+                      onChange={(event) => updateStorageConfig('region', event.target.value)}
+                      placeholder={t('settings.objectStorageRegionPlaceholder')}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageBucket')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      value={storageConfig.bucket}
+                      onChange={(event) => updateStorageConfig('bucket', event.target.value)}
+                      placeholder={t('settings.objectStorageBucketPlaceholder')}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStoragePrefix')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      value={storageConfig.pathPrefix}
+                      onChange={(event) => updateStorageConfig('pathPrefix', event.target.value)}
+                      placeholder={t('settings.objectStoragePrefixPlaceholder')}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageAccessKeyId')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      value={storageConfig.accessKeyId}
+                      onChange={(event) => updateStorageConfig('accessKeyId', event.target.value)}
+                      placeholder={t('settings.objectStorageAccessKeyIdPlaceholder')}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text text-xs text-base-content/60">{t('settings.objectStorageSecretAccessKey')}</span>
+                    <input
+                      className="input input-bordered input-sm mt-1"
+                      type="password"
+                      value={storageConfig.secretAccessKey}
+                      onChange={(event) => updateStorageConfig('secretAccessKey', event.target.value)}
+                      placeholder={t('settings.objectStorageSecretAccessKeyPlaceholder')}
+                    />
+                  </label>
+                </div>
+
+                <label className="form-control flex flex-col">
+                  <span className="label-text text-xs text-base-content/60">{t('settings.objectStoragePublicBaseUrl')}</span>
+                  <input
+                    className="input input-bordered input-sm mt-1"
+                    value={storageConfig.publicBaseUrl}
+                    onChange={(event) => updateStorageConfig('publicBaseUrl', event.target.value)}
+                    placeholder={t('settings.objectStoragePublicBaseUrlPlaceholder')}
+                  />
+                </label>
+
+                {storageConfig.provider === 's3' ? (
+                  <label className="label cursor-pointer justify-start gap-2 rounded-lg border border-base-300 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      checked={storageConfig.forcePathStyle}
+                      onChange={(event) => updateStorageConfig('forcePathStyle', event.target.checked)}
+                    />
+                    <span className="label-text">{t('settings.objectStorageForcePathStyle')}</span>
+                  </label>
+                ) : null}
+              </div>
+            ) : (
+              <div className="text-xs text-base-content/60 rounded-lg border border-base-300 bg-base-200 px-3 py-2">
+                {t('settings.objectStorageLocalHint')}
+              </div>
+            )}
+          </section>
+
           {/* Storage location */}
           <section className="flex flex-col gap-3">
             <h4 className="text-sm font-semibold">{t('settings.dataStorage')}</h4>
