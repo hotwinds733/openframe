@@ -1,6 +1,6 @@
 import { createCollection } from '@tanstack/db'
 import type { OperationType } from '@tanstack/db'
-import { ensureWebRuntimeAPIs } from '../platform/web_runtime_api'
+import { ensureWebRuntimeAPIs } from '../platform/runtime_api'
 
 ensureWebRuntimeAPIs()
 

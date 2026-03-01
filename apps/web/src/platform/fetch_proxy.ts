@@ -1,5 +1,6 @@
 let originalFetch: typeof fetch | null = null
 let proxyFetchInstalled = false
+const DIRECT_FETCH_RELEASE_PATH_PREFIX = '/repos/murongg/openframe/releases'
 
 type ProxyResponse =
   | { ok: true; status: number; headers: Record<string, string>; body: string; bodyEncoding: 'base64' }
@@ -26,6 +27,9 @@ function base64ToUint8(value: string): Uint8Array {
 function shouldProxyUrl(url: URL): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
   if (url.origin === window.location.origin) return false
+  if (url.origin === 'https://api.github.com' && url.pathname.startsWith(DIRECT_FETCH_RELEASE_PATH_PREFIX)) {
+    return false
+  }
   return true
 }
 
