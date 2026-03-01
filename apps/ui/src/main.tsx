@@ -2,7 +2,9 @@ import i18n from './i18n'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
+import 'react-photo-view/dist/react-photo-view.css'
 import { createHashHistory, createRouter, RouterProvider } from '@tanstack/react-router'
+import { PhotoProvider } from 'react-photo-view'
 import { routeTree } from './routeTree.gen'
 import { normalizeLanguage } from './utils/language'
 
@@ -41,7 +43,9 @@ async function init() {
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <RouterProvider router={router} />
+      <PhotoProvider>
+        <RouterProvider router={router} />
+      </PhotoProvider>
     </React.StrictMode>,
   )
 }

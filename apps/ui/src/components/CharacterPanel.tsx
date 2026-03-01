@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { PhotoView } from 'react-photo-view'
 import { FolderOpen, PlusCircle, RefreshCw, ScrollText, Shirt, Sparkles, Trash2, Upload, User, X } from 'lucide-react'
 import type { Character } from '../db/characters_collection'
 
@@ -68,7 +69,6 @@ export function CharacterPanel({
 }: CharacterPanelProps) {
   const { t } = useTranslation()
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
-  const [previewCharacterId, setPreviewCharacterId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createUploading, setCreateUploading] = useState(false)
@@ -86,9 +86,6 @@ export function CharacterPanel({
 
   const editingCharacter = editingCharacterId
     ? characters.find((item) => item.id === editingCharacterId) ?? null
-    : null
-  const previewCharacter = previewCharacterId
-    ? characters.find((item) => item.id === previewCharacterId) ?? null
     : null
 
   function getGenderLabel(value: string): string {
@@ -290,23 +287,38 @@ export function CharacterPanel({
                 if (!readOnly) handleOpenEdit(card)
               }}
             >
-              <button
-                type="button"
-                className="h-44 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (card.thumbnail) setPreviewCharacterId(card.id)
-                }}
-              >
-                {getThumbnailSrc(card.thumbnail) ? (
-                  <img src={getThumbnailSrc(card.thumbnail)!} alt={card.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="mb-4 size-20 rounded-full bg-linear-to-br from-primary/70 to-primary text-primary-content flex items-center justify-center text-xl font-bold shadow-lg">
-                    {card.name.slice(0, 1) || '?'}
-                  </div>
-                )}
-              </button>
+              {(() => {
+                const thumbnailSrc = getThumbnailSrc(card.thumbnail)
+                if (!thumbnailSrc) {
+                  return (
+                    <button
+                      type="button"
+                      className="h-44 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }}
+                    >
+                      <div className="mb-4 size-20 rounded-full bg-linear-to-br from-primary/70 to-primary text-primary-content flex items-center justify-center text-xl font-bold shadow-lg">
+                        {card.name.slice(0, 1) || '?'}
+                      </div>
+                    </button>
+                  )
+                }
+                return (
+                  <PhotoView src={thumbnailSrc}>
+                    <button
+                      type="button"
+                      className="h-44 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                      }}
+                    >
+                      <img src={thumbnailSrc} alt={card.name} className="h-full w-full object-cover" />
+                    </button>
+                  </PhotoView>
+                )
+              })()}
 
               <div className="p-3 flex-1 min-h-0 flex flex-col">
                 <p className="text-base font-semibold">{card.name}</p>
@@ -522,31 +534,6 @@ export function CharacterPanel({
         </div>
       ) : null}
 
-      {previewCharacter && getThumbnailSrc(previewCharacter.thumbnail) ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-base-content/70"
-            aria-label={t('projectLibrary.close')}
-            onClick={() => setPreviewCharacterId(null)}
-          />
-          <article className="relative z-10 w-full max-w-6xl rounded-xl border border-base-300 bg-base-100 overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-base-300">
-              <p className="text-sm font-medium line-clamp-1">{previewCharacter.name || t('projectLibrary.characterDefaultName')}</p>
-              <button type="button" className="btn btn-sm btn-ghost btn-circle" onClick={() => setPreviewCharacterId(null)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className="bg-black/80 max-h-[80vh] overflow-auto flex items-center justify-center p-4">
-              <img
-                src={getThumbnailSrc(previewCharacter.thumbnail)!}
-                alt={previewCharacter.name || t('projectLibrary.characterDefaultName')}
-                className="max-w-full h-auto object-contain rounded"
-              />
-            </div>
-          </article>
-        </div>
-      ) : null}
     </section>
   )
 }

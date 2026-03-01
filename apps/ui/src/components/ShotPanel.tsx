@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { PhotoView } from 'react-photo-view'
 import { Camera, Clapperboard, PlusCircle, Sparkles, Trash2, X } from 'lucide-react'
 
 type SceneOption = { id: string; title: string }
@@ -93,13 +94,11 @@ export function ShotPanel({
   const { t } = useTranslation()
   const mediaAspectClass = projectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [previewShotId, setPreviewShotId] = useState<string | null>(null)
   const [targetShotCountInput, setTargetShotCountInput] = useState('20')
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<ShotDraft>(emptyDraft)
 
-  const previewShot = previewShotId ? shots.find((item) => item.id === previewShotId) ?? null : null
   const targetShotCount = (() => {
     const value = Number(targetShotCountInput)
     if (!Number.isFinite(value)) return 20
@@ -251,21 +250,36 @@ export function ShotPanel({
 
           {shots.map((shot) => (
             <article key={shot.id} className="w-full rounded-xl border border-base-300 bg-base-100 overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(shot)}>
-              <button
-                type="button"
-                className={`${mediaAspectClass} border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-center justify-center w-full`}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (shot.thumbnail) setPreviewShotId(shot.id)
-                }}
-              >
-                {getThumbnailSrc(shot.thumbnail) ? (
-                  <img src={getThumbnailSrc(shot.thumbnail)!} alt={shot.title} className="h-full w-full object-cover" />
-                ) : (
-                  <Clapperboard size={28} className="text-base-content/60" />
-                )}
-              </button>
+              {(() => {
+                const thumbnailSrc = getThumbnailSrc(shot.thumbnail)
+                if (!thumbnailSrc) {
+                  return (
+                    <button
+                      type="button"
+                      className={`${mediaAspectClass} border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-center justify-center w-full`}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }}
+                    >
+                      <Clapperboard size={28} className="text-base-content/60" />
+                    </button>
+                  )
+                }
+                return (
+                  <PhotoView src={thumbnailSrc}>
+                    <button
+                      type="button"
+                      className={`${mediaAspectClass} border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-center justify-center w-full`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                      }}
+                    >
+                      <img src={thumbnailSrc} alt={shot.title} className="h-full w-full object-cover" />
+                    </button>
+                  </PhotoView>
+                )
+              })()}
               <div className="p-3 flex flex-col">
                 <p className="text-sm font-semibold line-clamp-1">#{shot.shot_index} {shot.title}</p>
                 <p className="mt-1 text-xs text-base-content/65 line-clamp-1">{sceneNameMap.get(shot.scene_id) || t('projectLibrary.sceneCardUntitled')}</p>
@@ -471,31 +485,6 @@ export function ShotPanel({
         </div>
       ) : null}
 
-      {previewShot && getThumbnailSrc(previewShot.thumbnail) ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-base-content/70"
-            aria-label={t('projectLibrary.close')}
-            onClick={() => setPreviewShotId(null)}
-          />
-          <article className="relative z-10 w-full max-w-6xl rounded-xl border border-base-300 bg-base-100 overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-base-300">
-              <p className="text-sm font-medium line-clamp-1">{previewShot.title || t('projectLibrary.shotCardUntitled')}</p>
-              <button type="button" className="btn btn-sm btn-ghost btn-circle" onClick={() => setPreviewShotId(null)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className="bg-black/80 max-h-[80vh] overflow-auto flex items-center justify-center p-4">
-              <img
-                src={getThumbnailSrc(previewShot.thumbnail)!}
-                alt={previewShot.title || t('projectLibrary.shotCardUntitled')}
-                className="max-w-full h-auto object-contain rounded"
-              />
-            </div>
-          </article>
-        </div>
-      ) : null}
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { PhotoView } from 'react-photo-view'
 import { FolderOpen, Package2, PlusCircle, RefreshCw, ScrollText, Sparkles, Tag, Trash2, Upload, X } from 'lucide-react'
 import type { Prop } from '../db/props_collection'
 
@@ -55,7 +56,6 @@ export function PropPanel({
 }: PropPanelProps) {
   const { t } = useTranslation()
   const [editingPropId, setEditingPropId] = useState<string | null>(null)
-  const [previewPropId, setPreviewPropId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createUploading, setCreateUploading] = useState(false)
@@ -69,9 +69,6 @@ export function PropPanel({
 
   const editingProp = editingPropId
     ? props.find((item) => item.id === editingPropId) ?? null
-    : null
-  const previewProp = previewPropId
-    ? props.find((item) => item.id === previewPropId) ?? null
     : null
 
   function handleOpenCreate() {
@@ -225,21 +222,36 @@ export function PropPanel({
               className="w-56 h-105 shrink-0 rounded-xl border border-base-300 bg-base-100 overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => handleOpenEdit(card)}
             >
-              <button
-                type="button"
-                className="h-40 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (card.thumbnail) setPreviewPropId(card.id)
-                }}
-              >
-                {getThumbnailSrc(card.thumbnail) ? (
-                  <img src={getThumbnailSrc(card.thumbnail)!} alt={card.name} className="h-full w-full object-cover" />
-                ) : (
-                  <Package2 size={40} className="mb-4 text-base-content/50" />
-                )}
-              </button>
+              {(() => {
+                const thumbnailSrc = getThumbnailSrc(card.thumbnail)
+                if (!thumbnailSrc) {
+                  return (
+                    <button
+                      type="button"
+                      className="h-40 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }}
+                    >
+                      <Package2 size={40} className="mb-4 text-base-content/50" />
+                    </button>
+                  )
+                }
+                return (
+                  <PhotoView src={thumbnailSrc}>
+                    <button
+                      type="button"
+                      className="h-40 border-b border-base-300 bg-linear-to-b from-base-200 via-base-100 to-base-200/70 flex items-end justify-center w-full"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                      }}
+                    >
+                      <img src={thumbnailSrc} alt={card.name} className="h-full w-full object-cover" />
+                    </button>
+                  </PhotoView>
+                )
+              })()}
 
               <div className="p-3 flex-1 min-h-0 flex flex-col">
                 <p className="text-base font-semibold line-clamp-1">{card.name || t('projectLibrary.propDefaultName')}</p>
@@ -379,31 +391,6 @@ export function PropPanel({
         </div>
       ) : null}
 
-      {previewProp && getThumbnailSrc(previewProp.thumbnail) ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-base-content/70"
-            aria-label={t('projectLibrary.close')}
-            onClick={() => setPreviewPropId(null)}
-          />
-          <article className="relative z-10 w-full max-w-6xl rounded-xl border border-base-300 bg-base-100 overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-base-300">
-              <p className="text-sm font-medium line-clamp-1">{previewProp.name || t('projectLibrary.propDefaultName')}</p>
-              <button type="button" className="btn btn-sm btn-ghost btn-circle" onClick={() => setPreviewPropId(null)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className="bg-black/80 max-h-[80vh] overflow-auto flex items-center justify-center p-4">
-              <img
-                src={getThumbnailSrc(previewProp.thumbnail)!}
-                alt={previewProp.name || t('projectLibrary.propDefaultName')}
-                className="max-w-full h-auto object-contain rounded"
-              />
-            </div>
-          </article>
-        </div>
-      ) : null}
     </section>
   )
 }
