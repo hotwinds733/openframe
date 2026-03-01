@@ -148,6 +148,8 @@ jobs:
             fi
 
             if [ -z "${CSC_LINK:-}" ]; then
+              unset CSC_LINK
+              unset CSC_KEY_PASSWORD
               export CSC_IDENTITY_AUTO_DISCOVERY=false
               echo "macOS signing disabled for this run (CSC_LINK not configured)."
             fi
