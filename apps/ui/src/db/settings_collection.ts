@@ -9,6 +9,58 @@ export interface Setting {
   value: string
 }
 
+const FALLBACK_SETTING_KEYS = [
+  'language',
+  'theme',
+  'onboarding_seen',
+  'onboarding_version',
+  'prompt_overrides',
+  'storage_config',
+] as const
+
+const FALLBACK_STORAGE_PREFIX = 'openframe:fallback:setting:'
+
+type SettingsApi = {
+  getAll: () => Promise<Array<{ key: string; value: string }>>
+  upsert: (key: string, value: string) => Promise<void>
+  delete: (key: string) => Promise<void>
+}
+
+function hasStorage(): boolean {
+  try {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+  } catch {
+    return false
+  }
+}
+
+function fallbackStorageKey(key: string): string {
+  return `${FALLBACK_STORAGE_PREFIX}${key}`
+}
+
+const fallbackSettingsApi: SettingsApi = {
+  getAll: async () => {
+    if (!hasStorage()) return []
+    return FALLBACK_SETTING_KEYS.map((key) => ({
+      key,
+      value: window.localStorage.getItem(fallbackStorageKey(key)) ?? '',
+    }))
+  },
+  upsert: async (key, value) => {
+    if (!hasStorage()) return
+    window.localStorage.setItem(fallbackStorageKey(key), value)
+  },
+  delete: async (key) => {
+    if (!hasStorage()) return
+    window.localStorage.removeItem(fallbackStorageKey(key))
+  },
+}
+
+function getSettingsApi(): SettingsApi {
+  const runtimeWindow = window as Window & { settingsAPI?: SettingsApi }
+  return runtimeWindow.settingsAPI ?? fallbackSettingsApi
+}
+
 type SyncCallbacks = {
   begin: () => void
   write: (msg: { type: Exclude<OperationType, 'delete'>; value: Setting } | { type: 'delete' }) => void
@@ -36,9 +88,10 @@ export const settingsCollection = createCollection<Setting>({
   getKey: (item) => item.id,
   sync: {
     sync: (params) => {
+      const settingsApi = getSettingsApi()
       syncCallbacks = params as unknown as SyncCallbacks
       const { begin, write, commit, markReady } = params
-      window.settingsAPI
+      settingsApi
         .getAll()
         .then((rows) => {
           if (rows.length > 0) {
@@ -58,23 +111,26 @@ export const settingsCollection = createCollection<Setting>({
   startSync: true,
   gcTime: 0,
   onInsert: async ({ transaction }) => {
+    const settingsApi = getSettingsApi()
     for (const m of transaction.mutations) {
       const item = m.modified as Setting
-      await window.settingsAPI.upsert(item.id, item.value)
+      await settingsApi.upsert(item.id, item.value)
     }
     confirmSync(transaction.mutations as unknown as Array<{ type: OperationType; original: Setting; modified: Setting }>)
   },
   onUpdate: async ({ transaction }) => {
+    const settingsApi = getSettingsApi()
     for (const m of transaction.mutations) {
       const item = m.modified as Setting
-      await window.settingsAPI.upsert(item.id, item.value)
+      await settingsApi.upsert(item.id, item.value)
     }
     confirmSync(transaction.mutations as unknown as Array<{ type: OperationType; original: Setting; modified: Setting }>)
   },
   onDelete: async ({ transaction }) => {
+    const settingsApi = getSettingsApi()
     for (const m of transaction.mutations) {
       const item = m.original as Setting
-      await window.settingsAPI.delete(item.id)
+      await settingsApi.delete(item.id)
     }
     confirmSync(transaction.mutations as unknown as Array<{ type: OperationType; original: Setting; modified: Setting }>)
   },
