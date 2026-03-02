@@ -11,12 +11,14 @@ Openframe is an open-source, free AI comic-drama creation studio with Web and de
 ## Features
 
 - End-to-end workflow: project -> script -> character/prop/scene -> shots -> production/export
-- Script editor + AI assistance: autocomplete, idea-to-script, novel excerpt adaptation, rewrite and polish
+- Script editor + AI assistance: autocomplete, idea-to-script generation, novel excerpt adaptation, and rewrite/polish
 - Structured extraction: automatically extract characters, props, scenes, and shot data from scripts
 - Character relation graph: script-based relation extraction with iterative optimization
 - Shot generation: auto-generate shots and control target shot count
-- Visual and video production: keyframe generation, shot video generation, timeline editing
+- Visual and video production: keyframe/shot-video generation and timeline editing
 - Export options: merged video, FCPXML, and EDL (for PR/DaVinci workflows)
+- AI provider configuration: independently configure models and endpoints for text, image, and video
+- Storage options: local storage plus object storage via S3/COS/OSS
 
 ## Web Runtime
 
