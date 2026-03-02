@@ -27,6 +27,7 @@ const menuItems: MenuItem[] = [
 ]
 const GITHUB_REPO_URL = 'https://github.com/murongg/openframe'
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/murongg/openframe/releases/latest'
+const WEB_VERSION_MANIFEST_URL = '/version.json'
 const ONBOARDING_VERSION = '5'
 const WEB_UPDATE_POLL_INTERVAL_MS = 5 * 60 * 1000
 
@@ -151,18 +152,33 @@ export default function Layout({ children }: LayoutProps) {
           rows.find((row) => row.key === 'update_dismissed_version')?.value || '',
         )
 
-        const response = await fetch(GITHUB_RELEASES_API_URL, {
-          headers: {
-            accept: 'application/vnd.github+json',
-          },
-        })
-        if (!response.ok) return
-
-        const latest = await response.json() as {
-          tag_name?: string
-          html_url?: string
+        let latestVersion = ''
+        let releaseUrl = `${GITHUB_REPO_URL}/releases/latest`
+        if (isDesktopRuntime) {
+          const response = await fetch(GITHUB_RELEASES_API_URL, {
+            headers: {
+              accept: 'application/vnd.github+json',
+            },
+          })
+          if (!response.ok) return
+          const latest = await response.json() as {
+            tag_name?: string
+            html_url?: string
+          }
+          latestVersion = normalizeVersion(latest.tag_name ?? '')
+          releaseUrl = latest.html_url || releaseUrl
+        } else {
+          const response = await fetch(WEB_VERSION_MANIFEST_URL, {
+            cache: 'no-store',
+            headers: {
+              accept: 'application/json',
+            },
+          })
+          if (!response.ok) return
+          const latest = await response.json() as { version?: string }
+          latestVersion = normalizeVersion(latest.version ?? '')
         }
-        const latestVersion = normalizeVersion(latest.tag_name ?? '')
+
         if (!latestVersion) return
         if (!isVersionNewer(latestVersion, currentVersion)) return
         if (dismissedVersion && dismissedVersion === latestVersion) return
@@ -171,7 +187,7 @@ export default function Layout({ children }: LayoutProps) {
         setUpdateNotice({
           currentVersion,
           latestVersion,
-          releaseUrl: latest.html_url || `${GITHUB_REPO_URL}/releases/latest`,
+          releaseUrl,
         })
       } finally {
         inFlight = false
