@@ -936,7 +936,7 @@ function ProviderDetail({
           <label className="text-xs font-medium text-base-content/60 uppercase tracking-wide">
             {t('settings.aiBaseUrl')}
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="flex flex-col gap-2">
             <label className="form-control">
               <span className="label-text text-[11px] text-base-content/60">{t('settings.aiBaseUrlText')}</span>
               <input

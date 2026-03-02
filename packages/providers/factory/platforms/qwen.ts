@@ -8,11 +8,11 @@ export function createQwenTextModel(modelId: string, apiKey?: string, baseURL?: 
 }
 
 export function createQwenVideoModel(modelId: string, apiKey?: string, baseURL?: string) {
-  return createAlibaba({ apiKey, baseURL }).video(modelId)
+  return createAlibaba({ apiKey, baseURL: baseURL || PROVIDER_BASE_URLS.qwenMedia }).video(modelId)
 }
 
 function toBaseUrl(baseURL?: string): string {
-  return stripTrailingSlash(baseURL || PROVIDER_BASE_URLS.qwen)
+  return stripTrailingSlash(baseURL || PROVIDER_BASE_URLS.qwenMedia)
 }
 
 function extractImageUrl(payload: unknown): string | null {
